@@ -1,0 +1,26 @@
+\chapter{Conclusion}
+
+Throughout this project, we have shown the theory behind the creation of a language and its implementation system, the decisions that one has to make, and we have explained the process of crafting the interpreter system for our programming language.
+\par
+We started with mock code to figure out what features we need in our language and how the general feeling and paradigm of the language should be. Having an initial version of the language, we proceeded to design and formalize its syntactic and semantic building blocks, including abstract grammar and type system.
+\par 
+Subsequently, we materialized our specifications in the implementation section. First, we built the lexer to tokenize source code into lexemes. Second, we built the parsable grammar and the parser in order to be able to generate an abstract syntax tree. Third, we implemented the type checker, which validated the source code based on our formally specified type rules to catch user errors at compile time. Finally, we implemented the evaluator, which evaluated the source code and also analyzed the grid-based map and calculated the most efficient path for a robot to take.  
+\par
+The implementation process involved several significant challenges and decisions. For instance, while building a parsable grammar, we often needed to decide whether we want to sacrifice the elegance of the language for simplicity of the implementation. In another case, implementing the enforcement of the type rules and evaluation semantics of the language has often proven difficult, considering the advanced functional features of the language such as currying and recursion.
+\par
+Overall, the language we have designed and implemented allows a programmer to declaratively define two-dimensional maps in a grid-based system in order to calculate an efficient path for a robot. Although not without plenty of room for improvement, we believe the declarative aspect and domain-specific features of the language provide ease of use, while the functional features provide a high degree of expressivity. Therefore, we believe we have met the goal we have set for ourselves in the beginning and answered our problem statement from \cref{sec:intro:statement}. 
+
+%\par 
+%We first designed a proto-language in the paradigm we thought most fitting. Afterwards, we created the lexemes and a context-free grammar that enabled us to configure a lexer to split the source code into tokens and then a parser to create an abstract syntax tree based on our grammar. We then proceeded to show how the syntax tree can be traversed both in order to check it for semantic correctness, but also to evaluate the expressions with the purpose of obtaining a result. Finally, we tied it all together, finalising the implementation system.
+
+\section{Future work}
+
+In the future, more work can be done in order to improve the language. For starters, being able to end the program with a \textit{print} statement instead of a \textit{route} would facilitate debugging by enabling the programmer to simply print the result of an expression.
+\par
+This paper argues for the necessity of ambiguity regarding the size of a unit in the grid space, claiming that it is important in order to adapt to different map and obstacle sizes. While true, the problem becomes that the robot will always occupy a \textit{1x1} space. In order to improve the system, the size of the robot should be customizable.
+\par
+Another feature the language lacks is the ability to remove points from a shape. This would increase the expressivity of the language.
+\par
+A better system for handling division should be implemented. The decision of only allowing natural numbers makes sense from the perspective of the grid layout, but it means that the division operation will, in practice, seldom work as expected. Expressions such as \textit{(10/3)*3} will equal 9. A better solution would be to allow floating point numbers, and simply round them only when assigned as a component of a vector.
+\par
+Finally, the functionality of the robot can be endlessly improved by, for example allowing multiple waypoints in route calculation, or adding syntax for expressing customizable actions that need to be performed in a certain order, e.g a mail robot that picks up mail, then picks up coffee, then delivers both.

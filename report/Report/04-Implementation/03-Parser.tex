@@ -1,0 +1,220 @@
+\section{Parser}
+\label{sec:parser}
+In this section, we will describe the implementation details of the parser, which represents the second phase of our system. The role of the Parser, as mentioned in \cref{background:parsing} is to distinguish syntactically valid programs from invalid ones, given a stream of tokens (lexemes) obtained during the lexing phase.  
+\subsection{Removing ambiguity}
+The main prerequisite for implementing a parser was to have the syntactical rules in our language defined in the form of a context-free grammar that is unambiguous. The syntax of AROS has so far only been declared in the abstract grammar from \cref{sec:abstract-grammar}. As mentioned in the section, this grammar is ambiguous and serves as a higher-level, simplified description of the syntax. To obtain an unambiguous, parsable grammar, we decided to start with our abstract grammar and apply transformations and possible alterations to it.
+\subsubsection{LL vs. LR}
+\par
+As mentioned in \cref{background:parsing}, there are two main families of context-free grammars used in parsers: LL and LR. We understood both approaches come with their own advantages and trade-offs, and we did not have any general preference towards either. 
+\par However, we did have a focus to arrive at a parsable grammar which is as close as possible to the original abstract grammar, mainly when it comes to complexity and readability. We believe that having a simpler, more readable grammar that is easy to reason about, provides traceability and in consequence simplifies implementation and debugging. Additionally, the close similarity between the abstract and concrete grammars makes it easier to iterate on the language.  
+\par
+With these goals in mind, we started exploring possible forms of grammar using a browser-based tool Grammophone \cite{grammophone}. Using the tool, we were able to test a grammar for its properties and membership in the above-mentioned families. We started with our abstract grammar, and based on the reported conflicts, we continued transforming our production rules to fix the conflicts. Using this iterative process, we eventually arrived at an initial version of the unambiguous grammar. According to Grammophone, the grammar we arrived at did not belong to the LL(1) family but did belong to LALR(1), which is a subset of LR(1). 
+\par 
+We concluded that the parsable LALR(1) grammar we achieved was sufficient, as it met our goals, having a relatively low complexity and being similar to our abstract grammar. Additionally, LALR(1) parsers also provide state-of-the-art space efficiency. \cite{craftingCompiler} Therefore, our parser is going to be an LALR(1) parser. 
+
+\subsection{Parsable grammar}
+\label{sec:parser:grammar}
+The following subsection contains the final LALR(1) grammar which specifies the syntax of AROS that the parser will need to recognize. 
+\subsubsection{Variable declarations}
+\label{sec:parser:grammar:vardecs}
+Firstly, the production rules for variable declarations may be seen in \cref{lst:parsable-var-decs}. In general, these rules closely follow our abstract grammar from \cref{sec:abstract-grammar}.
+\par As seen on the first line in the production rule \lstinline{Declaration}, declarations in AROS need to be terminated by a semicolon. while this syntax has already been introduced and used in \cref{chap:LanguageDesign}, it is worth noting that originally, this semicolon was not part of the vision for AROS syntax. In fact, it was the challenges encountered when developing the parsable grammar which drove this decision. This challenge, however, is not visible in the rules for declarations, but rather other rules which contain the \lstinline{Declaration} rule. Therefore, it will be pointed out later in this section. 
+\begin{lstlisting}[language=haskell, float=htb,
+caption=Parsable production rules for variable declarations,
+label=lst:parsable-var-decs]
+Declaration ::= Type identifier "=" Exp ";"
+Type ::= "int"
+       | "vec"
+       | "bool" 
+       | "[" Type "]" 
+       | "{" Type "}" 
+       | "(" "->" Type ")"
+       | "(" TypeList "->" Type ")"
+TypeList ::= Type | Type "," TypeList
+\end{lstlisting}
+\subsubsection{Expressions}
+Expressions, which represent a major part of the language, contain most of the complexity when it comes to challenges related to constructing a parsable grammar. Rules related to expressions are contained in \cref{lst:parsable-expressions} on page \cpageref{lst:parsable-expressions}.  
+\begin{lstlisting}[language=haskell, float=htb,
+caption=Parsable production rules for expressions,
+label=lst:parsable-expressions]
+Exp  ::= ExpA | ExpA Bop Exp
+ExpA ::= ExpB | ExpB "*" ExpA | ExpB "/" ExpA
+ExpB ::= ExpC | Uop ExpC
+ExpC ::= identifier | intLiteral | boolLiteral
+       | "<" Exp "," Exp ">"
+       | "[" ExpList "]" | "[" "]"
+       | "{" ExpList "}" | "{" "}"
+       | "(" Exp ")"
+       | identifier "(" ExpList ")" | Lambda "(" ExpList ")"
+       | Lambda
+       | "if" Exp "{" Block "}" "else" "{" Block "}"
+       | "cond" "{" ExpBlockList "otherwise" "{" Block "}" "}"
+       | "(" Exp "<" Exp ")"  | "(" Exp ">" Exp ")"
+       | "(" Exp "<=" Exp ")" | "(" Exp ">=" Exp ")"
+       | "(" Exp "==" Exp ")" | "(" Exp "!=" Exp ")"
+Uop ::= "not" | "head" | "tail" | "vecx" | "vecy"
+Bop ::= "+" | "-" | ":" | "++" | "<>" | "><" | ">>" | "crop" | "and" | "or"
+ExpList ::= Exp | Exp "," ExpList
+ExpBlockList ::= ExpBlock | ExpBlock ExpBlockList
+Lambda ::= "(" ")" "->" Type "{" Block "}"
+         | "(" IdList ")" "->" Type "{" Block "}"
+         | Type identifier "->" Type "{" Block "}"
+IdList ::= Type identifier | Type identifier "," IdList 
+Block ::= Exp | Declaration Block
+\end{lstlisting}
+\par Compared to the abstract grammar, the production rules for an expression differ significantly. In the abstract grammar, a single expression rule was sufficient to represent all possible expressions. However, this abstract representation is ambiguous. In order to remove the ambiguity, expressions needed to be defined in multiple non-terminal production rules: \lstinline{Exp}, \lstinline{ExpA}, \lstinline{ExpB}, \lstinline{ExpC} (lines 1-15). These rules enforce precedence and ensure that the parsing of an expression is deterministic, there is only a single possible sequence of derivations for any expression. The \lstinline{ExpC} productions are prioritized the highest, followed by unary operations, binary multiplication and division, and finally other binary operations (except comparisons). 
+\par Moreover, another decision stemming from ambiguity issues was the enforcement of parenthesizing binary comparison operators. On \cref{lst:parsable-expressions}, this change is visible on lines 13 to 15, where the productions for expression comparisons are defined, with parentheses around them. Should the parentheses not be enforced, there would be an ambiguity in the grammar, due to the combination of the vector production on line 5 and the greater-than operation (second production on line 13, but without the parentheses). We can illustrate the ambiguity on the following sequence of tokens: 
+\begin{lstlisting}[language=haskell, xleftmargin=.3\textwidth, numbers=none, frame=none]
+"<" Exp "," Exp ">" Exp ">"
+\end{lstlisting}
+Since \lstinline{Exp ">" Exp} is a valid expression, it is unclear, and not possible with only a single look-ahead token, for an LALR(1) parser to determine, whether it should reduce the vector at the first \lstinline{">"} token, or the second one. It is worth noting that in practice, this sequence of tokens does not make sense. The comparison of two expressions produces a boolean value, while a vector is a composition of two integer values. It is not, however, a syntax error, but rather a type error, which would be caught in a later stage of the system.
+
+\par Furthermore, the \lstinline{Block} rule, mainly used in functions and if/cond expressions, is the reason for the previously mentioned (\cref{sec:parser:grammar:vardecs}) decision to enforce declarations to terminate with a semicolon. This is because \lstinline{Block} can contain the sequence of non-terminals \lstinline{Declaration Exp}. Without the semicolon, expanded, this sequence would contain two consecutive \lstinline{Exp} non-terminals. Considering single token look-ahead, this sequence is ambiguous due to productions in \lstinline{ExpC}. 
+\par The ambiguity comes for instance from productions such as \lstinline{identifier "(" ExpList ")"}. When the current position of a shift-reduce parser is right after the \lstinline{identifier} with the look-ahead position at the opening parenthesis, it is unclear whether the parser should \textit{shift} the \lstinline{identifier} and continue parsing according to the function application production (line 9), or \textit{reduce} the \lstinline{identifier} section according to the \lstinline{identifier} production and continue parsing the parenthesis separately (there are several applicable productions which start with an opening parenthesis). 
+
+\subsubsection{Top-level definitions} % maybe better name ?
+Finally, the higher-level, domain-specific definitions such as the program root, the grid definition and the robot route did not undergo any significant changes and follow the rules defined in the abstract grammar. These may be seen in \cref{lst:parsable-domain-specific}.
+\begin{lstlisting}[language=haskell, float=htb,
+caption={Parsable production rules for program root, grid definition and robot route concepts},
+label=lst:parsable-domain-specific]
+Program ::= GridDef RobotRoute 
+          | DeclarationList GridDef RobotRoute
+GridDef ::= "grid" Exp "," Exp
+RobotRoute ::= "route" Exp "," Exp
+
+DeclarationList ::= Declaration 
+                  | Declaration DeclarationList
+\end{lstlisting}
+
+\subsection{Parser generator - Happy}
+At this point, we had accomplished building a parsable grammar for the syntax of AROS. As mentioned earlier, this grammar belongs to the LALR(1) family and therefore our parser will also be an LALR(1) parser. As explained in \cref{background:parser:advdisadv}, the structure of a bottom-up (LR) parser is significantly more complex than that of a top-down (LL) parser. Therefore, similarly to our lexer implementation from \cref{sec:impl:lexer}, we will not attempt to implement the parser by hand, but rather use a parser generator.
+\par Parser generators are tools capable of outputting the code for a parser, given they are provided with a specification of a parsable grammar for the language in question. Different implementations of parser generators differ in the families of languages they are able to generate a parser for. For example, the popular ANTLR tool generates parsers for languages in the LL(*) family.\cite{antlr-github} Similarly, there are also tools for generating LR parsers and, more importantly, LALR(1) parsers. 
+\par An example of an LALR(1) parser generator and the tool that is going to be used in this project is Happy. Happy is a popular, LALR(1) parser generator in the Haskell ecosystem, also used to parse the Haskell itself. It is often used in conjunction with the lexer generator Alex and provides a similar style of specifying the grammar for the language. Alex and Happy are the Haskell counterparts of the widely used Lex and Yacc tools from the C language ecosystem. \cite{happyUserGuide}
+\par We have selected Happy for several reasons. First of all, it meets our requirement of being able to generate an LALR(1) parser. Secondly, during our research, it appeared Happy is widely-used in the Haskell ecosystem, and therefore was the easiest to find resources for, including examples of using Alex and Happy together. Finally, we found its official documentation, the Happy User Guide, to be useful and helpful. \cite{happyUserGuide} 
+
+\subsection{Abstract Syntax Tree}
+\label{sec:parser:ast}
+Before we implement the parser, we first need to design structure of the result that we expect it to produce. We will use an abstract syntax tree (AST) structure defined simply as a set of Haskell algebraic data types. The AST was designed to closely follow our abstract grammar from \cref{sec:abstract-grammar}, with a few adjustments aimed at making the structure easier to work with. The following sections present the code for the AST representation:
+\subsubsection{Variable declarations}
+A declaration, seen in \cref{lst:ast-var-decs} is represented using a combination of a string (name), an expression (value) and a type (AROS is statically typed) (line 1). The type value is represented as a union type of the possible types in AROS (lines 2-7). 
+\begin{lstlisting}[language=haskell, float=htb,
+caption={\lstinline{Declaration} and \lstinline{DeclType} data types (AST)},
+label=lst:ast-var-decs]
+data Declaration = Decl DeclType String Exp
+data DeclType = TypeInt
+  | TypeVec
+  | TypeBool
+  | TypeList DeclType
+  | TypeSet DeclType
+  | TypeLambda [DeclType] DeclType
+\end{lstlisting}
+\subsubsection{Expressions}
+The types for representing expressions are presented in \cref{lst:ast-expressions}. Some notable changes compared to the abstract grammar is the usage of Haskell-native data structures such as lists and tuples instead of recursion. This helps keep the code concise and easier to work with by leveraging the standard library of Haskell. In addition to that, using list and/or tuple values instead of recursive types where possible also helps remove depth from the AST. 
+\par For instance, on line 10, the \lstinline{LambdaExp} constructor uses a list of tuples to represent the type and name of each parameter of the lambda expression. Similarly, the \lstinline{CondExp} constructor, uses a list of tuples to represent the associations between each condition and its corresponding block. The separate \lstinline{Block} parameter represents the block for the default (\lstinline{otherwise}) condition.
+\begin{lstlisting}[language=haskell, float=htb,
+caption={\lstinline{Exp}, \lstinline{Block}, \lstinline{UnaryOp} and \lstinline{BinaryOp} data types (AST)},
+label=lst:ast-expressions]
+data Exp = VariableExp String
+  | ParenExp Exp
+  | IntegerExp Int
+  | BooleanExp Bool
+  | VectorExp Exp Exp
+  | ListExp [Exp]
+  | SetExp [Exp]
+  | BinaryExp Exp BinaryOp Exp
+  | UnaryExp UnaryOp Exp
+  | LambdaExp [(DeclType,String)] DeclType Block
+  | ApplicationExp Exp [Exp]
+  | IfExp Exp Block Block
+  | CondExp [(Exp, Block)] Block
+data Block = Block [Declaration] Exp
+data UnaryOp = Not | Head | Tail | Vecx | Vecy
+data BinaryOp = Plus | Minus | Times | Div
+  | Cons | Append
+  | Union | Intersection
+  | Shift | Crop
+  | And | Or
+  | Gt | Lt | Gte | Lte | Equal | NotEqual
+\end{lstlisting}
+
+\subsubsection{Top-level definitions}
+The top-level definitions may be seen in \cref{lst:ast-top-level} below.
+\begin{lstlisting}[language=haskell, float=htb,
+caption={\lstinline{Program}, \lstinline{GridDef} and \lstinline{RobotRoute} data types (AST)},
+label=lst:ast-top-level]
+data Program = Program [Declaration] GridDef RobotRoute
+data GridDef = GridDef Exp Exp
+data RobotRoute = RobotRoute Exp Exp
+\end{lstlisting}
+
+\subsection{Parser specification}
+Now that we have a parsable, LALR(1) grammar and have selected Happy as a tool to generate an LALR(1) parser, we need to integrate the grammar into a Happy grammar file. As was the case with Alex, Happy uses a domain-specific language for this purpose. The language used in the grammar file is a combination of two main concepts. For expressing the grammar, a variation of Backus-Naur form (BNF) is used. Then, localized blocks of Haskell code are used to decorate this grammar and construct the parsed result (such as the AST from \cref{sec:parser:ast}). In addition to these main concepts, there is also a token section (using the \lstinline{token} directive), where types of tokens involved are declared and mapped to the actual (Haskell) result types which are outputted during lexing.\cite{happyUserGuide}
+
+\subsubsection{Token specification}
+The first thing we configured in the Happy grammar file, were the token data type mappings. This is achieved using the \lstinline[mathescape]{tokentype} and \lstinline{token} directives A sample may be seen in \cref{lst:parser-token-spec}.
+\begin{lstlisting}[language=happy, float=htb,
+caption={Example of our token mappings in the Happy grammar file},
+label=lst:parser-token-spec]
+%tokentype            { TokenState }
+%token
+    id                { TokenState _ (TokenIdent $$) }
+    intLiteral        { TokenState _ (TokenIntLit $$) }
+    boolLiteral       { TokenState _ (TokenBoolLit $$) }
+    '->'              { TokenState _ TokenArrow }
+    '+'               { TokenState _ TokenPlus }
+-- ... (rest of tokens skipped for brevity)
+\end{lstlisting}
+\par In the Happy grammar file, everything inside of curly brackets represents verbatim Haskell code. In the token specification in \cref{lst:parser-token-spec}, the \lstinline{tokentype} directive is set to the result type of our Alex lexer - \lstinline{TokenState}, as described in \cref{sec:lexer:spec}. The mappings in the \lstinline{token} directive consist of an alias (symbol on the left), which is how the token is going to be referred to in the grammar. On the right of each alias, the Haskell code in bracket is a pattern that should be matched for the particular alias. For instance, according to line 3, \lstinline{id} (identifier) corresponds to a token result (\lstinline{TokenState}) only when the token result matches one whose second parameter is a \lstinline{TokenIdent}. The value at \$\$ (a string) will be saved with \lstinline{id} for later use.
+\subsubsection{Grammar specification}
+The mapped tokens may now be used in the grammar specification in order to define the grammar from \ref{sec:parser:grammar} in the Happy grammar file and decorate it with code so that the generated parser would construct the AST based on types from \cref{sec:parser:ast}.
+
+\begin{lstlisting}[language=happy, float=htb,
+caption={Happy grammar specification for non-terminal \lstinline{ExpC}},
+label=lst:parser-expc-example]
+ExpC :: { Exp }
+ExpC : id                           { VariableExp $1 }
+    | intLiteral                    { IntegerExp $1 }
+    | boolLiteral                   { BooleanExp $1 }
+    | '<' Exp ',' Exp '>'           { VectorExp $2 $4 }
+    | '[' ExpList ']'               { ListExp $2 }
+    | '[' ']'                       { ListExp [] }
+    | '{' ExpList '}'               { SetExp $2 }
+    | '{' '}'                       { SetExp [] }
+    | '(' Exp ')'                   { ParenExp $2 }
+    | id '(' ExpList ')'            { ApplicationExp (VariableExp $1) $3 }
+    | Lambda '(' ExpList ')'        { ApplicationExp $1 $3 }
+    | Lambda                        { $1 }
+    | 'if' Exp '{' Block '}' 'else' '{' Block '}'       { IfExp $2 $4 $8 }
+    | cond '{' ExpBlockList otherwise '{' Block '}' '}' { CondExp $3 $6 }
+    | '(' Exp '<' Exp ')'           { BinaryExp $2 Lt $4  }
+    | '(' Exp '>' Exp ')'           { BinaryExp $2 Gt $4 }
+    | '(' Exp '<=' Exp ')'          { BinaryExp $2 Lte $4 }
+    | '(' Exp '>=' Exp ')'          { BinaryExp $2 Gte $4 }
+    | '(' Exp '==' Exp ')'          { BinaryExp $2 Equal $4 }
+    | '(' Exp '!=' Exp ')'          { BinaryExp $2 NotEqual $4 }
+\end{lstlisting}
+
+\par To illustrate how this works, \cref{lst:parser-expc-example} contains an example, in which the non-terminal \lstinline{ExpC} from the LALR(1) grammar is declared and decorated. The left side encapsulates essentially the production rules in BNF notation, while on the right side, each production is decorated with Haskell code. The role of the code is to construct the appropriate AST node, which is why type constructors are seen most commonly. 
+\par The numbers prepended with a dollar sign (\$1, \$2, \$3, etc.) are a special syntax within the code. If we consider each production as a sequence of tokens $t_1, t_2, \dots, t_n$, the symbols $\$1, \$2, \dots, \$n$ can be used to access the values of $t_1, t_2, \dots, t_n$. \cite{happyUserGuide} For example, in the production on line 12, when the sequence \lstinline{Lambda '(' ExpList ')'} is parsed, the \lstinline{ApplicationExp} constructor will be called. The parsed value (AST node) of the \lstinline{Lambda} non-terminal is parsed, it will become the first parameter ($\$1$) of this constructor. Similarly, the parsed value of \lstinline{ExpList} will become the second parameter. 
+\par Recall that in \cref{sec:parser:ast}, we have simplified the AST by using Haskell data structures such as lists instead of recursion. However, the BNF notation of our parsable grammar (\cref{sec:parser:grammar}), and also the Happy grammar file, is only capable of expressing lists recursively. This requires a slightly different approach in the rule decorations. An example of this may be seen in \cref{lst:parser-explist-example}, where the non-terminal for comma-separated expression lists is implemented. In grammar, \lstinline{ExpList} is defined recursively as either a single expression (non-terminal \lstinline{Exp}, line 2) or an expression list prepended with a comma and an expression (line 3). In case of a single expression, we simply construct a list singleton using the value of \lstinline{Exp} ($\$1$). In the other case, we need to prepend the value of \lstinline{Exp} to the beginning of the \lstinline{ExpList}. On line 1, we have an (optional) type definition for \lstinline{ExpList}, indicating that, when parsed, it will result in a Haskell list of type \lstinline{Exp} (in this case, \lstinline{Exp} refers to the AST type from \cref{lst:ast-expressions}, not the non-terminal \lstinline{Exp}). Therefore, since we know that on line 3, the value of \lstinline{ExpList} ($\$3$) will be of type \lstinline{[Exp]} and the value of \lstinline{Exp} ($\$1$) will be of type \lstinline{Exp}, we can simply construct this using the cons operation on lists in Haskell (\lstinline{:}).
+
+\begin{lstlisting}[language=happy, float=htb,
+caption={Happy grammar specification for non-terminal \lstinline{ExpList}},
+label=lst:parser-explist-example]
+ExpList ::                   { [Exp] }
+ExpList : Exp                { [$1] }
+        | Exp ',' ExpList    { $1 : $3 }
+\end{lstlisting}
+
+\subsection{Interface}
+The parser generated by Happy can be invoked using the \lstinline{parseAros} function, which has the following type signature, shown in \cref{lst:parser-parseAros-sig}:
+\begin{lstlisting}[language=haskell, float=htb, numbers=none,
+caption={Type signature of \lstinline{parseAros}},
+label=lst:parser-parseAros-sig]
+parseAros :: FilePath -> String -> Either String Program
+\end{lstlisting}
+The function must be provided a file name and a string (source code) and returns an \lstinline{Either} type, which can either be a string (an error) or a \lstinline{Program} type (root node of our AST). The file name is required so that it can be included in error messages. 
+
+\subsection{Parser summary}
+To conclude, in this section, we have documented and described our process of implementing a parser for the syntax of AROS. We started with our abstract, ambiguous grammar, which we transformed into a parsable, LALR(1) grammar. Furthermore, we researched and selected Happy as our parser generator tool and also designed an abstract syntax tree structure for AROS, using Haskell algebraic data types. Finally, we integrated our parsable grammar into the Happy grammar file, together with decorations in the form of Haskell code, in order to configure Happy to generate a parser for AROS which returns our AST structure.
+\pagebreak

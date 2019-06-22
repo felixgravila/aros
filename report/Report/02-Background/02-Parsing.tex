@@ -1,0 +1,146 @@
+\section{Parsing}
+\label{background:parsing}
+
+After splitting the source code into tokens, the next step of the compilation process is the parsing phase, also known as syntax analysis. Parsing identifies the phrase structure of the source text (the parse tree) and returns an intermediate representation of the code as a parse tree. Syntactical errors are also found during this phase if the source code cannot be transformed into a parse tree using the grammar rules.
+
+\subsection{Grammar}
+
+The grammar of a language is expressed in Backus-Naur form. The following is an example of BNF notation for a grammar that can create simple English sentences such as "the cat sees the rat.", "I like a cat", "I see the rat" etc.
+
+\begin{grammar}
+<Sentence> ::= <Subject> <Verb> <Object> .
+
+<Subject> ::= I | a <Noun> | the <Noun>
+
+<Object> ::= me | a <Noun> | the <Noun>
+
+<Noun> ::= cat | mat | rat
+
+<Verb> ::= like | is | see | sees 
+\end{grammar}
+
+Grammars can be recursive. This allows for repetition and much more expressive languages.
+
+\begin{grammar}
+<Sentence> ::= the dog is <Very> cute .
+
+<Very> ::= <Very> <Very> | very
+\end{grammar}
+
+This allows for sentences like "the dog is very cute .", but also "the dog is very very very cute ."
+
+Extended Backus-Naur form, or EBNF, helps with the clarity of such rules. Among others, it enables using a special syntax to mark symbols as optional or repeating. The grammar above would then become 
+
+\begin{grammar}
+<Sentence> ::= the dog is \{ very \} cute .
+\end{grammar}
+
+
+\subsection{Grammar ambiguity}
+
+Considering a simple grammar such as 
+
+\begin{grammar}
+<Operation> ::= <Digit> | <Operation> + <Operation> | <Operation> * <Operation> 
+
+<Digit> ::= 1 | 2 | 3 
+\end{grammar}
+
+For a sentence such as "1 + 2 * 3" in the grammar, we can identify two separate parse trees:
+\begin{itemize}
+    \item ( 1 + 2 ) * 3 
+    \item 1 + ( 2 * 3 )
+\end{itemize}
+
+Therefore, the grammar is ambiguous. A parser cannot guarantee a unique result when parsing an ambiguous grammar. \cite[p. 121]{craftingCompiler} This is important, otherwise the previous example could evaluate to 9 or 7, respectively.
+\par
+In order to make such a grammar unambiguous, the following could be done:
+
+\begin{grammar}
+<Operation> ::= <Digit> | <Digit> + <Operation> | <Digit> * <Operation> 
+
+<Digit> ::= 1 | 2 | 3 
+\end{grammar}
+
+"1 + 2 * 3" can now only be constructed using a parse tree that evaluates to "1 + ( 2 * 3 )", so the grammar is now unambiguous and will always evaluate to 6.
+
+\subsection{Top-Down parsers}
+
+Parsers can be split into two main categories: Top-Down and Bottom-Up. This section will include the former, and the next section the latter.
+
+Top-down parsers perform a recursive descent starting from the root (top) down to the leaves. Since it is aware about the root of the tree, a top-down parser starts there and, from the right-hand side towards the left-hand side, attempts to match the string with the possible productions. So, starting from
+
+\begin{grammar}
+<Sentence> ::= <Subject> <Verb> <Object> .
+\end{grammar}
+
+the parser asserts that the string must begin with something produced by \textit{<Subject>}. It, therefore, attempts to parse \textit{<Subject>}. If \textit{<Subject>} parses, it continues with \textit{<Verb>}, \textit{<Object>}, and finally checks that the string ends with a period.
+ 
+\par
+To help the process in the case of non-terminals with multiple productions such as \textit{<Subject>}, we first need to define \textit{FIRST} sets. A LL grammar allows a set of all possible tokens that can occur at the right-hand side to be computed for any given production. This is called the \textit{FIRST} set for the production. For example, the \textit{FIRST} set for \textit{<Subject>} in the micro English example would be "i", "a", and "the".
+\par
+Since all \textit{FIRST} sets are pairwise disjoint, the parser can deduce the production that will be used purely by peeking the next symbol. Thus, the language of such a grammar is LL(1), meaning only one look-ahead token is required to parse it. Based on that, a parser tasked to parse a \textit{<Subject>} need only peek: if it sees "i" it accepts "i" and returns. If it sees "a" it accepts "a" and recursively tries to parse a \textit{<Noun>}. Same for "the". 
+\par
+If a grammar has productions such as
+
+\begin{grammar}
+<X> ::= a <A> | a <B>
+\end{grammar}
+
+the \textit{FIRST} sets are not pairwise disjoint, therefore the language is not LL(1). It can be LL(k) (k refers to the number of look-ahead tokens needed), however, if the \textit{FIRST} sets of A and B are disjoint. 
+
+
+\subsection{Bottom-Up parsers}
+
+As opposed to Top-Down parsers, Bottom-Up parsers begin from the bottom and make their way up to the top. While a Top-Down parser decides which rule to apply by peeking the first k tokens, a Bottom-Up parser looks at the whole production and decides at the end. Its task is, therefore, to figure out the rightmost derivation of a parse tree. Once it knows that, it is able to reduce the production.
+\par
+To facilitate the process, a parse table is computed. The parse table consists of states on one axis and possible tokens on the other axis. For each possible state-token combination, it indicates to the parser which state it should continue on to and whether it should shift or reduce. Shifting means simply reading another token while reducing refers to the process of transforming a production into its parent non-terminal. 
+\par
+There are two kinds of conflicts that can occur when computing a parse table for a grammar: Shift-reduce and Reduce-reduce. 
+\par
+Shift-reduce happens when, for a specific state and symbol, the algorithm cannot decide between a shift or reduce action.
+Reduce-reduce happens when, in the same situation, the algorithm cannot decide between multiple reductions.
+\par
+An example would be the dangling else problem. When the head (.) is at position
+
+\begin{center}
+    if a then if b then c1 . else c2
+\end{center}
+
+it is unknown whether the algorithm should reduce, producing the parse tree
+
+\begin{center}
+    if a then (if b then c1) else c2
+\end{center}
+
+or shift, producing
+
+\begin{center}
+    if a then (if b then c1 else c2)
+\end{center}
+
+\subsection{Advantages and disadvantages of each type of parser}
+\label{background:parser:advdisadv}
+
+Top-Down parsers have an implementation complexity advantage over Bottom-Up parsers since they can easily be hand-written. This makes debugging the parser itself much easier. They are also smaller since Bottom-Up parsers use symbol tables that can grow very large.
+\par
+Another advantage of Top-Down parsers is error messages. Since Top-Down always knows what it expects and tries to match the source, it can give very detailed error messages such as "X expected, but received Y". This also improves recovery for the same reasons.
+\par
+On the other hand, Top-Down parsers are less expressive than Bottom-Up parsers. Left recursion cannot be used since the \textit{FIRST} set would then be unable to be computed.
+
+\subsection{Types of bottom up parsers}
+
+\par 
+Bottom up parsers (also called LR parsers) are parameterized by the number of look-ahead symbols needed to determine the appropriate parser action. LR(k) parsers can peek at the next k tokens. The “0” in LR(0) refers not to the look-ahead at parse-time, but rather to the look-ahead used in constructing the parse table. At parse-time, LR(0) and LR(1) parsers index the parse table using one token of look-ahead. For k $\geq$ 2, an LR(k) parser uses k tokens of look-ahead. \cite[p. 189]{craftingCompiler}
+
+\par 
+The number of columns in an LR(k) parse table grows dramatically with k. For example, an LR(3) parse table is indexed by the parse state to select a row, and by the next 3 input tokens to select a column. If the terminal alphabet has $n$ symbols, then the number of distinct three-token sequences is $n^3$. More generally, an LR(k) table has $n^k$ columns for a token alphabet of size $n$. To keep the size of parse tables within reason, most parser generators are limited to one token of look-ahead.\cite[p. 189]{craftingCompiler} 
+
+\par 
+ Most grammars require some look-ahead during table construction and therefore LR(0) does not always suffice. In the previous section we mentioned both shift/reduce and reduce/reduce conflicts. In context of LR(0) parser, in both cases there are two actions that the parser can undertake. The SLR(k) stands for Simple LR with $k$ tokens of look-ahead. SLR parsers use a follow set $Follow (A)$ to reduce to A in any state containing reducible item for A. A follow set $Follow (A)$ is a set of terminals that can follow a non-terminal A.   
+ 
+ \par
+ LALR(k) (Look Ahead LR with $k$ tokens of look-ahead) parsers, offers a more specialized computation of the symbols that can follow a non terminal. LALR(k) is based on the LR(0) construction and therefore an LALR(k) table has the same number of rows (states) as does an LR(0) table for the same grammar. \cite[p. 211]{craftingCompiler}  The LALR(1) parser is less powerful than the LR(1) parser, and more powerful than the SLR(1) parser. All conflicts that occur in using a LALR(1) parser on an unambiguous LR(1) grammar are reduce/reduce conflicts. Due to its balance of power and efficiency, LALR(1) is the most popular LR table-building method. \cite[p. 211]{craftingCompiler} 
+ 
+ \par 
+ LR(k) parsing is not very practical because even LR(1) tables (k = 1) are typically much larger than the LR(0) tables upon which SLR(k) and LALR(k) parsing are based. Moreover, it is rare that LR(1) can handle a grammar for which LALR(1) construction fails.  \cite[p. 219]{craftingCompiler} 

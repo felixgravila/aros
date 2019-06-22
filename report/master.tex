@@ -1,0 +1,115 @@
+%%Initial Setup
+%\input{Setup/preamble.tex}
+%\input{Setup/hyphenations.tex}
+%\input{Setup/macros.tex}
+%%\usepackage{glossaries}
+%
+%%Starting the document
+%\begin{document}
+%
+%%Frontmatter
+%\pagenumbering{roman} %use roman page numbering in the frontmatter
+%
+%\input{Setup/forside.tex} %Frontpage
+%\input{Setup/titelblad.tex} %Danish and English title pages
+%\input{Setup/forord.tex} %Preface
+%% \input{Setup/glossary.tex} %Glossary
+%
+%%\selectlanguage{danish} %Start specific language
+%\pdfbookmark[0]{Contents}{label:contents} %Make PDF bookmarks
+%\renewcommand{\contentsname}{Table of contents} %Change table of contents name
+%\pagestyle{fancy} %Change page style. Enable headers and footers again
+%
+%\tableofcontents %Table of contents
+%%\addcontentsline{toc}{chapter}{Table of contents}
+%%\listoffixmes
+%%\listoftodos
+%\setcounter{chapter}{0} %Chapter counter
+%
+%%Mainmatter
+%\newpage
+%%\printnoidxglossaries %% Printing Glossari page
+%
+%%\input{Report/introduction.tex}
+%%\input{Report/glossary_entry}
+%\input{Report/introduction2.tex}
+%\input{Report/probAnalysis.tex}
+%
+%\clearpage
+%
+%%\pagenumbering{gobble}
+%
+%%Figurliste
+%\listoffigures
+%
+%%Tabelliste
+%\listoftables
+%
+%%Litteraturliste
+%
+%%Bilag
+%\input{Bilag/bilag.tex}
+%
+%\end{document}
+
+
+
+%Initial Setup
+\input{Setup/preamble.tex}
+\input{Setup/hyphenations.tex}
+\input{Setup/macros.tex}
+%\usepackage{glossaries}
+
+
+%Starting the document
+\begin{document}
+	
+%Frontmatter
+\pagenumbering{roman} %use roman page numbering in the frontmatter
+
+\input{Setup/forside.tex} %Frontpage
+\input{Setup/titelblad.tex} %Danish and English title pages
+\input{Setup/forord.tex} %Preface
+% \input{Setup/glossary.tex} %Glossary
+
+%\selectlanguage{danish} %Start specific language
+\pdfbookmark[0]{Contents}{label:contents} %Make PDF bookmarks
+\renewcommand{\contentsname}{Table of contents} %Change table of contents name
+\pagestyle{fancy} %Change page style. Enable headers and footers again
+\tableofcontents %Table of contents
+%\addcontentsline{toc}{chapter}{Table of contents}
+%\listoffixmes
+%\listoftodos
+
+\setcounter{chapter}{0} %Chapter counter
+
+%Mainmatter
+\newpage
+\pagenumbering{arabic}
+\input{Report/01-Introduction/01-introduction.tex}
+\newpage
+\input{Report/02-Background/00-Background.tex}
+\newpage
+\input{Report/03-Language-design/00-Language-design.tex}
+\newpage
+\input{Report/04-Implementation/00-Implementation.tex}
+\newpage
+\input{Report/05-fi/01-conclusion.tex}
+
+%\input{Report/probAnalysis.tex}
+
+
+\clearpage
+
+%\pagenumbering{gobble}
+
+%Figurliste
+\listoffigures
+
+%Litteraturliste
+\bibliography{literature}
+
+%Bilag___APENDICE
+%\input{Bilag/bilag.tex}
+	
+\end{document}

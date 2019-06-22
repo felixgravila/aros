@@ -1,0 +1,415 @@
+\section{Type checker}
+In this section, we will describe the type checker, which represents the next phase of our implementation. The role of the type checker is to validate that the abstract syntax tree returned by the parser from \cref{sec:parser} is in accordance with the type rules of AROS (defined in \cref{sec:design:formal:type-system}).
+
+\subsection{Approach}
+In \cref{sec:haskell}, we have presented our choice for Haskell as the implementation language for this system. There, we mentioned the two main features of Haskell that we found useful for implementing traversals over trees: algebraic data structures and pattern matching. 
+\par The implementation of the type checker is a specialized instance of this use-case. That is, in order to validate the types in AROS source code, the type checker will need to traverse the abstract syntax tree defined in \cref{sec:parser:ast}. 
+\par Thus, this implementation will use a functional approach, using functions, algebraic data types and pattern matching. Additionally, the implementation will also use Haskell monads such as the \lstinline{Maybe} monad and the \lstinline{Writer} monad. The monads will only be used for convenience, but we do not consider them to be essential to the implementation, which is why their usage will only be explained superficially. 
+
+\subsection{Function structure}
+Functions in the type checker could be classified into two main groups, based on their return type: functions which return a type and functions which return a Boolean value. The former are used for expressions, as based on our grammar and type rules, for any kind of expression, we can determine its type based on its parameters. This constitutes the majority of functions in the type checker. On the other hand, the Boolean functions will be used for cases where we simply want to validate whether a certain type rule is valid (\lstinline{ok}) or not.
+\subsubsection{Monad structure}
+While the functions do in general output a \lstinline{Type} value or a \lstinline{Bool} value, the actual function signatures wrap these types in monads in order to for example handle optional values or logging.
+\par For better readability, we use type aliases for these, such as \lstinline{MWType} and \lstinline{MWBool}.  In this case, the MW in the aliases stands for Maybe Writer, meaning the values are wrapped in a combination of the \lstinline{Maybe} monad (for optional values) and the \lstinline{Writer} monad (for logging).
+\par As mentioned earlier, the monads are not essential to the implementation, but for the sake of completeness, these are the definitions of the type aliases:
+\begin{lstlisting}[language=haskell, 
+caption={Type aliases of monads used in type checker implementation}]
+type MWType = MaybeT (Writer [LogMsg]) Type
+type MWBool = MaybeT (Writer [LogMsg]) Bool
+type WBool = Writer [LogMsg] Bool
+\end{lstlisting}
+
+\newpage
+\subsection{Types}
+\label{sec:checker:types}
+Each type in AROS is defined in the \lstinline{Type} ADT, included in \cref{lst:checker:type}. 
+\begin{lstlisting}[language=haskell,
+caption={Data type used to represent types during type checking},
+label=lst:checker:type]
+data Type = TAny
+  | TInteger
+  | TBoolean
+  | TVector
+  | TList Type
+  | TSet Type
+  | TFunction [Type] Type
+  deriving (Show)
+\end{lstlisting}
+\par In the data type \lstinline{Type} in \cref{lst:checker:type}, a different constructor is used for each type. The constant types in lines 2-4 are simply defined as a parameter-less constructor. The list and set types in lines 5 and 6 take any type as a parameter. For example, \lstinline{TList TInteger} represents a list of integers. Similarly, the constructor for the functions, in line 7, takes 2 parameters: a list of types (function arguments) and a single type (function output).
+\par The \lstinline{TAny} constructor in line 1 can be thought of as a type placeholder or a temporary type. This constructor was added purely for implementation convenience. For the majority of our expression type rules, we can use a function that returns a \lstinline{Type}. However, there are two main exceptions: the rules $EMPTY\_LIST_{EXP}$ and $EMPTY\_SET_{EXP}$ (3.13 and 3.18 on \cpageref{page:empty-set-list}). There, we simply know that the empty set or empty list is well-typed, but we cannot return an actual type. Furthermore, the empty list can be used in operations together with any type. For example, type rule 3.14 (\cpageref{page:empty-set-list}) states that the cons operation (\lstinline{:}) can be applied to expressions $e1$ and $e2$, if $e1$ has type $T$ and $e2$ has type $[T]$. Thus, if $e2$ is the empty list, $e1$ can be of any type and the resulting type of the cons operations will be a list of the same type as $e1$ is of. A similar case can be made for sets as well. 
+\par Therefore, for the cases where we need to return the type of an empty list/set, we will simply use the \lstinline{TAny} constructor. To facilitate the automatic type matching of empty lists/sets in applicable operations (such as cons), we simply implement custom \lstinline{Eq} instance for \lstinline{Type}, where \lstinline{TAny} will always be equal to any other type it has been compared with. The implementation of the \lstinline{Eq} instance may be seen in \cref{lst:checker:type-eq}, with the specific cases for \lstinline{TAny} being in lines 9 and 10. 
+\begin{lstlisting}[language=haskell,
+caption={Custom \lstinline{Eq} instance for \lstinline{Type}},
+label=lst:checker:type-eq]
+instance Eq Type where
+  (==) TInteger TInteger = True
+  (==) TBoolean TBoolean = True
+  (==) TVector TVector = True
+  (==) (TList t1) (TList t2) = t1 == t2
+  (==) (TSet t1) (TSet t2) = t1 == t2
+  (==) (TFunction args1 out1) (TFunction args2 out2) = (args1 == args2)
+      && (out1 == out2)
+  (==) TAny _ = True
+  (==) _ TAny = True
+  (==) _ _ = False
+\end{lstlisting}
+
+\subsection{Environment}
+To implement the symbol table, as explained in \cref{sec:bg:symbol-table}, we used a map data structure with keys of type \lstinline{String} and values of type \lstinline{Type}. In the code, this structure referred to using a type alias \lstinline{Environment}. \Cref{lst:checker:environment} contains the full definition.
+\begin{lstlisting}[language=haskell, numbers=none,
+caption={\lstinline{Environment} data structure (type alias)},
+label=lst:checker:environment]
+type Name = String
+type Environment = Map Name Type
+\end{lstlisting}
+
+\subsection{Expressions}
+The top-level function handling expressions is called \lstinline{checkExp}. The function takes the environment as its first argument and an expression (AST node) as the second argument and returns the type of the expression. The full signature can be seen in \cref{lst:checker:exp-initial}. Inside the function, the expression is pattern-matched against all of its possible constructors and each case is handled.
+\subsubsection{Integer, Boolean and parenthesized expressions}
+\Cref{lst:checker:exp-initial} contains the code for handling the most simple cases in order to illustrate this structure. In line 3 and 4, constant types are returned for literal expressions, while in line 5, handling of a parenthesized expression is simply passed through by calling \lstinline{checkExp} for the inner expression.
+\begin{lstlisting}[language=haskell,
+caption={Portion of \lstinline{checkExp} that handles constant and parenthesized expressions},
+label=lst:checker:exp-initial]
+checkExp :: Environment -> Exp -> MWType
+checkExp env exp = case exp of
+    IntegerExp _ -> return TInteger
+    BooleanExp _ -> return TBoolean
+    ParenExp exp -> checkExp env exp
+-- ...
+\end{lstlisting}
+
+\subsubsection{Variable expressions}
+Variable expressions or, applied occurrences of name bindings, are handled by looking up the name in the environment, as seen in \cref{lst:checker:vars}. If found, its type is returned (line 9). Otherwise, an error is logged (line 7) and the \lstinline{Nothing} value is returned (line 8, \lstinline{mzero} returns the zero value for a monad, which for the case of \lstinline{Maybe} is \lstinline{Nothing}).  
+
+\newpage
+\begin{lstlisting}[language=haskell,
+caption={Handler for variable expressions},
+label=lst:checker:vars]
+checkExp :: Environment -> Exp -> MWType
+checkExp env exp = case exp of
+-- ...
+    VariableExp name ->
+      case M.lookup name env of
+        Nothing -> do
+          lift $ logErr $ "Variable error: Variable '" <> name <> "' not in scope."
+          mzero
+        Just t -> return t
+-- ...
+\end{lstlisting}
+
+\subsubsection{Vector expressions}
+The case handler for vector expressions may be seen in \cref{lst:checker:vectors}. After the types of expressions $e1$ and $e2$ of the vector are determined (lines 5 and 6), we check whether both expressions are of type integer (line 7). If they are, we return a vector type (line 14), otherwise we again log an error and return a \lstinline{Nothing} value (lines 10-12). 
+\begin{lstlisting}[language=haskell,
+caption={Handler for vector expressions},
+label=lst:checker:vectors]
+checkExp :: Environment -> Exp -> MWType
+checkExp env exp = case exp of
+-- ...
+    VectorExp e1 e2 -> do
+      t1 <- checkExp env e1
+      t2 <- checkExp env e2
+      let intsOk = (t1 == TInteger) && (t2 == TInteger)
+      if (not intsOk)
+      then do
+        lift $ logErr $
+          "Vector error: Expected <TInteger, TInteger> but got <" <> (show t1) <> ", " <> (show t2) <> ">"
+        mzero
+      else
+        return TVector
+-- ...
+\end{lstlisting}
+
+\subsubsection{List and Set expressions}
+\Cref{lst:checker:lists} contains the handler for list expressions. There, we first check whether the list expression is empty (line 5), in which case we will simply return a list of \lstinline{TAny}. Otherwise, we get the type for each expression in the list by mapping \lstinline{checkExp} (curried to include the current environment) over them (line 8). Afterwards, we check whether the list is homogenous, i.e. all of the types are equal to each other(line 9). Only homogenous lists are allowed, and so, only in this case, we return the list type (line 11). 
+\par For set expressions, the approach is identical, except instead of \lstinline{TList}, \lstinline{TSet} is used in lines 6 and 11.
+\begin{lstlisting}[language=haskell,
+caption={Handler for list expressions},
+label=lst:checker:lists]
+checkExp :: Environment -> Exp -> MWType
+checkExp env exp = case exp of
+-- ...
+    ListExp exps -> do
+      if (null exps)
+      then return $ TList TAny
+      else do
+        types@(t:ts) <- mapM (checkExp env) exps
+        let homo = and $ map (== t) ts
+        if homo
+        then return $ TList t
+        else do
+          lift $ logErr $ "Found heterogenous list with types: " <> (show types)
+          mzero
+-- ...
+\end{lstlisting}
+
+\subsubsection{Binary and Unary expressions}
+For binary expressions, we employed a slightly different approach. Because some of the operators are overloaded (e.g. multiplication), checking all the possibilities in nested if statements would quickly become convoluted and less readable. Instead, we will have a function for each possible operation. We will then apply every one of these functions to the parameters of a binary expression (two expressions and an operator). Assuming a valid expression, a single function should succeed and return a type, which becomes the type of the binary expression.
+
+\begin{lstlisting}[language=haskell,
+caption={Handler for binary expressions},
+label=lst:checker:binary]
+checkExp :: Environment -> Exp -> MWType
+checkExp env exp = case exp of
+-- ...
+    BinaryExp e1 op e2 -> do
+      t1 <- checkExp env e1
+      t2 <- checkExp env e2
+      let checkers = [checkIntBinaryOp, checkVecBinaryOp, checkIntVecBinaryOp,
+                      checkBoolBinaryOp, checkBoolCompareBinaryOp,
+                      checkListBinaryConsOp, checkListBinaryOp,
+                      checkSetVecBinaryOp, checkSetBinaryOp]
+      let results = map (\f -> f t1 op t2) checkers
+      let successes = catMaybes results
+      handleBinaryResults successes op t1 t2
+-- ...
+\end{lstlisting}
+
+\par \Cref{lst:checker:binary} contains the binary expressions handler. There, we apply the mentioned functions on line 11. Each of them returns a \lstinline{Maybe Type}, so on line 12, we only take the results that are not \lstinline{Nothing}. Finally, we pass these results to a helper function \lstinline{handleBinaryResults} which simply assesses the validity of the binary expression based on the results from all the applied functions.
+
+\par To give an example of one of the functions that check operations (lines 7-10 in \cref{lst:checker:binary}), we will use the \lstinline{checkListBinaryConsOp} function, shown in \cref{lst:checker:cons}. As indicated earlier and seen in line 1, the function should accept three parameters: type of $e1$, the operator, and type of $e2$, and return an optional type (the type, or \lstinline{Nothing}). The main logic is located in line 8, where we first check whether the operator is even applicable to this function, followed by checking whether the second expression is a list, and finally, checking whether the inner type of the list matches that of the first expression. Only if all three of these conditions are true, we return the result type, which in the case of this operation is a list type.
+
+\begin{lstlisting}[language=haskell,
+caption={Handler for binary expressions},
+label=lst:checker:cons]
+checkListBinaryConsOp :: Type -> BinaryOp -> Type -> Maybe Type
+checkListBinaryConsOp t1 op t2 = do
+  let opOk = op == Cons
+  let isList = case t2 of
+                  TList _ -> True
+                  otherwise -> False
+  let (TList t) = t2
+  if opOk && isList && (t1 == t)
+  then return $ TList t1
+  else mzero
+\end{lstlisting}
+
+\par The helper function for the cons operation is an example where we have taken advantage of the \lstinline{TAny} type constructor from \cref{sec:checker:types}. Its usage relates to the \lstinline{t1 == t} comparison. If the list is not empty, then the inner type of the list (\lstinline{t}) should be equal to the type of the prepended expression (\lstinline{t1}). At the same time, if the list is empty, the operation should still be valid. The special \lstinline{Eq} instance (\cref{lst:checker:type-eq}) implemented for \lstinline{Type} and the \lstinline{TAny} constructor ensures this, because the inner type of an empty list is \lstinline{TAny} (as per the code in \cref{lst:checker:lists}, and therefore equivalent with any other type when compared with \lstinline{==}.
+
+\par Unary expression follows the same approach, using helper functions per possible operation and therefore will not be explained separately.
+
+\subsubsection{\lstinline[language=none]{if} expressions}
+The code for handling \lstinline[language=none]{if} expressions in \cref{lst:checker:if} simply checks whether the types of its components are correct, before returning the type of its blocks as its overall type. The condition component (\lstinline[language=none]{cond}) must be boolean, while the types of the true block (\lstinline{b1}) and false block (\lstinline{b2}) must be equal. We get the type of \lstinline[language=none]{cond} on line 5 using \lstinline{checkExp}. As for the types of the blocks, we use a different function - \lstinline{checkBlock} in line , as blocks are not standalone expressions in AROS. The \lstinline{checkBlock} function will be explained in \cref{sec:checker:blocks}.
+
+\begin{lstlisting}[language=haskell,
+caption={Handler for \lstinline{if} expressions},
+label=lst:checker:if]
+checkExp :: Environment -> Exp -> MWType
+checkExp env exp = case exp of
+-- ...
+    IfExp cond b1 b2 -> do
+      tCond <- checkExp env cond
+      let condOk = tCond == TBoolean
+      when (not condOk) $
+        lift $ logErr $ "Invalid if expression: condition was " <> (show tCond)
+      t1 <- checkBlock env b1
+      t2 <- checkBlock env b2
+      let blocksOk = t1 == t2
+      when (not blocksOk) $
+        lift $ logErr $ "Invalid if expression: inconsistent return types " <> (show t1) <> " and " <> (show t2)
+      if condOk && blocksOk
+      then return t1
+      else mzero
+-- ...
+\end{lstlisting}
+
+\subsubsection{\lstinline[language=none]{cond} expressions}
+For \lstinline[language=none]{cond} expressions, the approach is very similar as for \lstinline[language=none]{if} expressions. Since \lstinline[language=none]{cond} expressions may have an arbitrary number of conditions and blocks, the \lstinline{checkExp} and \lstinline{checkBlock} functions will instead be mapped over all the conditions and blocks present. The final check is then to assert that all the conditions are Boolean and all the blocks are of same type. The code for this handler may be seen in \cref{lst:checker:cond}.
+
+\begin{lstlisting}[language=haskell,
+caption={Handler for \lstinline{cond} expressions},
+label=lst:checker:cond]
+checkExp :: Environment -> Exp -> MWType
+checkExp env exp = case exp of
+-- ...
+    CondExp condBlocks otherwiseBlock -> do
+      let (conds, blocks) = unzip condBlocks
+      condTypes <- mapM (checkExp env) conds
+      let condsOk = and $ map (== TBoolean) condTypes
+      when (not condsOk) $
+        lift $ logErr $ "Invalid condition(s) in cond expression: Condition types were " <> (show condTypes)
+      blockTypes <- mapM (checkBlock env) (otherwiseBlock : blocks)
+      let blocksOk = and $ map (== (head blockTypes)) blockTypes
+      when (not blocksOk) $
+        lift $ logErr $ "Invalid block(s) in cond expression: Blocks types were " <> (show condTypes)
+      if condsOk && blocksOk
+      then return (head blockTypes)
+      else mzero
+-- ...
+\end{lstlisting}
+
+\subsubsection{Lambda expressions}
+The lambda expression handler in \cref{lst:checker:lambda} is the first example in this section where some manipulation of the environment is required. As per \cref{lst:checker:lambda}, a new local environment is created as the union of the current environment and the typed arguments of the lambda (line 7). The type of the body of the lambda - a block - is then determined by using \lstinline{checkBlock} with the new local environment. Finally, if the lambda block is of the same type as the type that was declared for the lambda, we return the function type with the corresponding argument type list and return type.
+
+\begin{lstlisting}[language=haskell,
+caption={Handler for lambda expressions},
+label=lst:checker:lambda]
+checkExp :: Environment -> Exp -> MWType
+checkExp env exp = case exp of
+-- ...
+    LambdaExp args dtOut block -> do
+      let tOut = convertDeclType dtOut
+      let varTypes = map (\(dt, name) -> (name, convertDeclType dt)) args
+      let localEnv = M.union (M.fromList(varTypes)) env
+      tBlock <- checkBlock localEnv block
+      let blockOk = tBlock == tOut
+      when (not blockOk) $
+        lift $ logErr $
+          "Invalid lambda expression: Block declared as " <> (show tOut) <> " but was " <> (show tBlock)
+      if blockOk
+      then return $ TFunction ((snd . unzip) varTypes) tOut
+      else mzero
+-- ...
+\end{lstlisting}
+
+\subsubsection{Function application expressions}
+In the case of function application, the AST node contains an expression for the function and a list of expressions as the parameters to pass to the function. Therefore, as seen in \cref{lst:checker:application}, we first get the type of the function expression (line 5) and then assert whether it even is a function type (lines 6-8 and 18). 
+\par Afterwards, we get the types for each of the parameter expressions (line 12). We also check whether the parameter list is valid (line 13). We cannot simply compare the provided and expected parameter lists, because a function may be also curried, i.e. applied with fewer parameters in order to create a new function. Therefore, the check in line 13 compares the provided parameters (\lstinline{tParams}) with the $n$ first parameters in expected parameters (\lstinline{tFnParams}), where $n$ is the length of \lstinline{tParams}. 
+\par Finally, in lines 19-23, we return the appropriate type. Here, again, attention has been paid to the case of curried functions. In case the function is curried (applied with fewer parameters than expected, checked in line 20), we return a new function type, with the remaining parameters and same return type of the original function.
+\begin{lstlisting}[language=haskell,
+caption={Handler for function application expressions},
+label=lst:checker:application]
+checkExp :: Environment -> Exp -> MWType
+checkExp env exp = case exp of
+-- ...
+    ApplicationExp fn params -> do
+      tFn <- checkExp env fn
+      let isFunc = case tFn of
+                     TFunction _ _ -> True
+                     otherwise -> False
+      when (not isFunc) $ lift $ logErr $
+          "Invalid application expression: Expected a function but got " <> (show tFn)
+      let (TFunction tFnParams tOut) = tFn
+      tParams <- mapM (checkExp env) params
+      let paramsOk = tParams == (take (length tParams) tFnParams)
+      when (not paramsOk) $ lift $ logErr $
+          "Invalid application expression: Function (" <> (show tFn)
+          <> ") applied with invalid parameter list" <> (show tParams)
+      let curried = (length tParams) < (length tFnParams)
+      if isFunc && paramsOk
+      then return $
+        if (length tParams) < (length tFnParams)
+        then TFunction (drop (length tParams) tFnParams) tOut
+        else tOut
+      else mzero
+-- ...
+\end{lstlisting}
+
+\subsection{Variable declarations}
+Type checking variable declarations is required, as both the root \lstinline{Program} AST node as well as the \lstinline{Block} node can contain them. We will first present the simpler function of validating a single declaration, followed by the function we use for validating multiple declarations in sequence.
+
+\subsubsection{Single declaration}
+To validate a single declaration, we use the \lstinline{checkDeclaration} function from \cref{lst:checker:single-dec}. 
+
+\begin{lstlisting}[language=haskell,
+caption={Function for type checking a single declaration},
+label=lst:checker:single-dec]
+checkDeclaration :: Environment -> Declaration -> Writer [LogMsg] ()
+checkDeclaration env (Decl dt name exp) = do
+  let expType = convertDeclType dt
+  let env' = case expType of
+               TFunction _ _ -> M.insert name expType env
+               otherwise -> env
+  realType <- runMaybeT $ checkExp env' exp
+  case realType of
+    (Just t) -> do
+      let typeOk = expType == t
+      when (not typeOk) $
+        logErr $ "Invalid declaration: Expected " <> (show expType) <> " but got " <> (show t)
+    Nothing -> return ()
+\end{lstlisting}
+
+\par As seen in \cref{lst:checker:single-dec}, the return type for \lstinline{checkDeclaration} in line 1 is different from the other functions presented so far. The return type \lstinline[language=haskell]{Writer [LogMsg] ()} means that the function only produces monadic side effects (error logging using the \lstinline{Writer}) and does not return any result. Therefore, when a declaration is invalid, it will be indicated only by the presence of an error message in the error log. We will use the property, later on, to allow for error recovery and logging multiple errors at once.
+\par To check the declaration, we simply get the type of the right-hand side expression (line 7) and compare it to the type declared in syntax on the left-hand side (line 10). The code in line 11 ensures that an error message is logged if these types do not match.
+
+\subsubsection{Sequence of declarations}
+Type checking multiple declarations is more complicated as simply using the \lstinline{checkDeclaration} function for each declaration. In addition to that, we need to ensure that each declaration is type checked in an environment that already contains entries for all the previously type checked declarations. We achieve this in the \lstinline{checkDeclarations} function from \cref{lst:checker:seq-decs} by using a folding function.
+
+\begin{lstlisting}[language=haskell,
+caption={Function for type checking a sequence of declarations},
+label=lst:checker:seq-decs]
+checkDeclarations :: Environment -> [Declaration] -> Writer [LogMsg] Environment
+checkDeclarations env decs = foldM folder env decs
+  where
+    folder :: Environment -> Declaration -> Writer [LogMsg] Environment
+    folder env' dec@(Decl dt name _) = do
+      let t = convertDeclType dt
+      checkDeclaration env' dec
+      return (M.insert name t env')
+\end{lstlisting}
+
+\par In line 2 of \cref{lst:checker:seq-decs}, we fold the \lstinline{folder} function over all the declarations, passing in the current environment as the initial accumulator. Line 2 also ensures the final environment is returned after all declarations by \lstinline{checkDeclarations}. The \lstinline{folder} function is defined as a local function in lines 4-8. There, a declaration is essentially passed through to the \lstinline{checkDeclaration} function from \cref{lst:checker:single-dec} (line 7) and the accumulated environment is updated with the declared type of the declaration (line 8). 
+\par The intended implication of this approach is that the declaration is registered in the environment regardless of whether it was valid or not. Any type check that happens after the declaration will assume the declaration was valid. The overall type check will still eventually fail because the invalid declaration will log an error message (which are checked at the end). However, using this approach allows us to try to recover after an error in order to find out if there are any other type errors further in the code.    
+
+
+\subsection{Blocks}
+\label{sec:checker:blocks}
+As the previous section demonstrated, in order to type-check many of the expression types in AROS, we need to have a way to check blocks. Blocks introduce a new scope and are composed of a list of declaration, followed by an expression. The handler function for blocks, called \lstinline{checkBlock} may be seen in \cref{lst:checker:block}.
+
+\begin{lstlisting}[language=haskell,
+caption={Handler for blocks},
+label=lst:checker:block]
+checkBlock :: Environment -> Block -> MWType
+checkBlock env (Block decs body) = do
+  localEnv <- lift $ checkDeclarations env decs
+  checkExp localEnv body
+\end{lstlisting}
+
+\par As most of the complexity of blocks lies in the declarations, \lstinline{checkBlock} in \cref{lst:checker:block} simply checks all declarations using \lstinline{checkDeclarations} from \cref{lst:checker:seq-decs} (line 3). The body of the block is then checked in this local environment in line 4.  
+
+\subsection{Program, Grid definition \& Robot route}
+The following sections describe the functions for type checking the remaining AST nodes: \lstinline{Program}, \lstinline{GridDef} and \lstinline{RobotRoute}. 
+
+\subsubsection{Program}
+The handling of \lstinline{Program} may be seen in \cref{lst:checker:program}. At first, all the declarations are checked (line 3), same as in the case of the \lstinline{checkBlock} function from \cref{lst:checker:block}. The remaining components, grid definition and  robot route, are then checked in this local environment (lines 4 and 5). The boolean result of \lstinline{checkProgram} is then return as the logical conjunction of the boolean results of \lstinline{checkGrid} and \lstinline{checkRoute} (line 6).
+
+\begin{lstlisting}[language=haskell,
+caption={Handler for AST root},
+label=lst:checker:program]
+checkProgram :: Environment -> Program -> MWBool
+checkProgram env (Program decs grid route) = do
+  localEnv <- lift $ checkDeclarations env decs
+  gridOk <- checkGrid localEnv grid
+  routeOk <- checkRoute localEnv route
+  return $ gridOk && routeOk
+\end{lstlisting}
+
+\subsubsection{Grid definition}
+The grid definition consists of two parameters of fixed types. The first parameter must be a vector, while the second parameters must be a set of vectors. Therefore, the corresponding function \lstinline{checkGrid} in \cref{lst:checker:grid} simply checks these parameters, logs errors (if applicable) and returns a Boolean result. 
+
+\begin{lstlisting}[language=haskell,
+caption={Handler for grid definition},
+label=lst:checker:grid]
+checkGrid :: Environment -> GridDef -> MWBool
+checkGrid env (GridDef bounds points) = do
+  tBounds <- checkExp env bounds
+  tPoints <- checkExp env points
+  let boundsOk = tBounds == TVector
+  when (not boundsOk) $
+    lift $ logErr $ "Invalid grid definition: Expected bounds parameter to be a vector but was " <> (show tBounds)
+  let pointsOk = tPoints == TSet TVector
+  when (not pointsOk) $
+    lift $ logErr $ "Invalid grid definition: Expected points parameter to be a vector set but was " <> (show tPoints)
+  return $ boundsOk && pointsOk
+\end{lstlisting}
+
+\subsubsection{Robot route}
+Same as grid definition, the robot route takes 2 parameters of fixed types, the start and end coordinate, both of which must be vectors. The handler for robot route is included in \cref{lst:checker:route} and follows the same structure as \lstinline{checkGrid} in \cref{lst:checker:grid}.
+\begin{lstlisting}[language=haskell,
+caption={Handler for robot route},
+label=lst:checker:route]
+checkRoute :: Environment -> RobotRoute -> MWBool
+checkRoute env (RobotRoute start end) = do
+  tStart <- checkExp env start
+  tEnd <- checkExp env end
+  let startOk = tStart == TVector
+  when (not startOk) $
+    lift $ logErr $
+    "Invalid grid definition: Expected start parameter to be a vector but was " <> (show tStart)
+  let endOk = tEnd == TVector
+  when (not endOk) $
+    lift $ logErr $
+    "Invalid grid definition: Expected end parameter to be a vector but was " <> (show tEnd)
+  return $ startOk && endOk
+\end{lstlisting}
+
+\clearpage

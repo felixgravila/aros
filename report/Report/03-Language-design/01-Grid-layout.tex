@@ -1,0 +1,9 @@
+\section{Grid layout}
+
+A grid layout is the foundation of the map layout written in AROS. For a route to be computed, the programmer must have access to all relevant information about the space, which necessarily includes size and obstacles. Most likely, this information will already be presented as a grid. Therefore, recreating it into AROS is simply a matter of setting the dimensions and declaring the obstacles.
+\par
+A unit's dimension in the AROS grid space is necessarily arbitrary in order to allow different levels of resolution. To program a coffee delivery robot, the resolution of an obstacle might have to be 0.2 meters, for small objects and walls. For a drone or large spaces, however, it might be perfectly fine to keep the resolution at multiple meters per square, both to make programming easier and to reduce the complexity of the computation.
+\par
+The output of the program will be a series of "up", "down", "left" and "right" commands. These correspond to the robot's movements on the grid. So if the robot is at position (3,3) and receives a "down" command, it will go to the position (4,3). Receiving a "left" command afterwards moves it to (4,2). 
+\par
+We count on the software running on the robot having these aspects adjustable. Furthermore, an important assumption we make is that the robots are capable of perfectly executing their instructions. Via an array of sensors, if it receives the command "up", it will perform the operation. If it gets stuck or breaks down, it stops the execution. 

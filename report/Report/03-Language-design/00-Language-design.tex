@@ -1,0 +1,9 @@
+\chapter{Language Design}
+\label{chap:LanguageDesign} 
+
+AROS is designed to be descriptive and easy to use. Instead of making the programmer focus on the process of an agent and how it should achieve its goal, AROS allows the programmer to just describe what the environment and objectives are. Consequently, AROS computes the optimal process to achieve these objectives, since it is a detail that the programmer does not care about. Rather than writing a program that consists of a set of instructions (e.g. move left, go forward, etc.), the programmer writes a program that describes the environment (size of the area, position and size of obstacles) and the goal. AROS then finds the optimal path for the robot and creates a set of instructions it understands. 
+
+\input{Report/03-Language-design/01-Grid-layout.tex}
+\input{Report/03-Language-design/02-Paradigm.tex}
+\input{Report/03-Language-design/03-Informal-overview.tex}
+\input{Report/03-Language-design/04-Formal-specification.tex}

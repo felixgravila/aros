@@ -1,0 +1,361 @@
+\section{Evaluator}
+
+\subsection{Deciding the implementation system for our language}\label{Evaluator:Deciding}
+
+In most situations, the difference between a compiler and an interpreter does not make too much of a difference besides the performance aspect. In our case, however, the problem of finally having the output of our programs be executed on an embedded system changes the possibilities that we have. 
+
+The five possibilities are: 
+\begin{enumerate}
+    \item Compiling for running on the same machine
+    \item Compiling for running on the robot
+    \item Interpreting on the same machine
+    \item Interpreting on the robot
+    \item Hybrid implementation system
+\end{enumerate}
+
+Our functional language is Turing complete, and due to the undecidability of the halting problem, it is impossible to predetermine if a program written in AROS will terminate or not. It is also trivial to create a program which, even though it terminates, is unable to find a corresponding path. If we were to use a compiler, our source code would simply be translated to some sort of machine code that the robot would then execute. Due to the previous two reasons, this situation risks that the robot will either not terminate and remain stuck, or not find a path, both undesirable situations for a potentially time-critical system.
+\par 
+Furthermore, the hardware present on the robots is also expected to be as basic and primitive as possible. It, therefore, makes more sense to use the powerful hardware in our computers and servers for computing, instead of the robot. 
+\par
+Using these reasons we can conclude that executing code on the robot, whether compiled or interpreted, is unwise, considering our priorities. 
+\par
+Compiling code offers a large performance advantage. Once compiled, executing the code is very fast, and the compilation only needs to happen once. In the case of an interpreter, the code needs to always be read, parsed and checked for each execution, which is usually unnecessary. An AROS program, however, is designed to be run only once. Thus, most performance benefits that stem from having the code compiled become negligible, and the process has a large amount of unnecessary overhead introduced.
+\par
+For the reasons stated above, hybrid interpreters make no sense for us either. Translating the source code to an intermediate code would still mean one of two things: it would either need to be interpreted on the same machine it was compiled on, adding unnecessary overhead, or it would be interpreted on the robot, risking non-termination or the inability to find a route.
+\par
+The best option for AROS is, therefore, pure interpretation. Added are the debugging benefits that an interpreted system offers. Considering these arguments, it makes the most sense for our implementation system to simply interpret the code, evaluate the expressions and (potentially) return the result of the computation directly.
+\par
+Our implementation will perform lexing and parsing, analyse and detect semantic errors, and execute the code. As per the grammar rules, the last line of the program requests a route for the robot in the predefined grid. This will be handled by our implementation as well, the result is a series of "up", "down", "left", "right"\footnote{Trivially transformed to, for example, a 2-bit series of instructions the robot can more easily interpret} instructions for the robot to follow. For debugging purposes, map information such as size and obstacle locations are also output\footnote{Assuming the map was computed and output correctly, checking that the answer is correct is decidable. Therefore it can be verified before deploying to the robots.}.
+
+
+\subsection{Overview and General structure}\label{Evaluator:Impl:GeneralStructure}
+
+The decision of using Haskell pays off greatly during the implementation phase. Instead of creating classes for each data type and then utilising the visitor pattern, Haskell data types can much more easily be defined to contain the values we are interested in, and visiting the nodes is as easy as pattern matching. 
+
+Test driven development was employed. Starting with basic expressions on to difficult examples, the test program was first written, and then code added and tested until the functionality worked as expected. As mentioned above, map information and obstacle locations are also output. This helps test that the program works well by, for example, defining the size of the grid to equal the result of a computation.
+
+The basic framework for coding the evaluator is simple. Since we know the structure of the AST, we simply pattern match the expressions we expect. The function is called \lstinline{evalTree}. 
+
+\lstinline{evalTree} initiates the evaluation process and makes sure that proper error messages are received in case of any problems either during the creation of the AST or during the evaluation. Note the first parameter passed to \lstinline{evaluateProgram}, which is an empty map. This will hold the scope variables.
+
+\begin{lstlisting}[language=haskell]
+evalTree :: Either String Program -> String
+evalTree (Right (Program decls grid wpts)) =
+  case evaluateProgram Map.empty decls grid wpts of
+    (Right x) -> x
+    (Left err) -> err
+evalTree (Left _) = "Program wasn't parsed correctly"
+\end{lstlisting}
+
+The root of the program is a Program data type, which will contain a list of declarations, a grid definition and finally the waypoints for the robot. It, therefore, needs to first evaluate all declarations in order, making sure to add the results to the scope, then evaluate the map and finally compute the path. By using pattern matching, we recurse through the definition list, evaluating them one by one.
+\par
+After each expression is evaluated, it will go into a \lstinline{Map} data structure. The key will be the string signifying the name it is defined to, but we need to define a new data type for the value. We call it \lstinline{Value}, and it encompasses everything an expression can possibly return:
+
+\begin{lstlisting}[caption={},language=haskell]
+data Value = TInt Int
+           | TVec (Int, Int)
+           | TBool Bool
+           | TList [Value]
+           | TSet (Set Value)
+           | TGridSet (Set Value) Value
+           | TLambda (Map String Value) [(DeclType,String)] DeclType Block
+\end{lstlisting}
+
+In order of appearance, any expression will return either:
+\begin{itemize}
+    \item an Integer
+    \item a Vector
+    \item a Boolean value
+    \item a List containing any other \lstinline{Value} type
+    \item a Set containing any other \lstinline{Value} type
+    \item the computed values for the Grid expression
+    \item a Lambda function
+\end{itemize}
+
+Therefore, the \lstinline{Map} we use will have the type \lstinline{(Map String Value)}
+
+Most of the rest of the code also relies heavily on the \lstinline{Either} Monad. Values correctly evaluated will be returned as a \lstinline{Right Value}, whereas errors will be a \lstinline{Left String}. The properties of this monad enable clearer code while making debugging easier using error messages passed down.
+
+\begin{lstlisting}[caption={The part of evaluateProgram that handles definitions},language=haskell]
+evaluateProgram :: Map String Value -> [Declaration] -> GridDef -> RobotRoute -> Either String String
+evaluateProgram defs ((Decl _ ident expr):xs) grd wpts =
+  case (expHandler defs expr) of
+    Right computedDecl -> evaluateProgram (Map.insert ident computedDecl defs) xs grd wpts
+    Left e -> Left e
+\end{lstlisting}
+
+When the definition list is exhausted, we evaluate the grid and call \lstinline{handleRobot}, which returns the path of the robot. It then forms the output of the program.
+
+\begin{lstlisting}[caption={The part of evaluateProgram that handles the grid and the robot path},language=haskell, label={evaluator:evaluateprogram2}]
+evaluateProgram defs [] grd wpts = do
+  let (RobotRoute e1 e2) = wpts
+  let (Right start@(TVec tstart)) = expHandler defs e1
+  let (Right end@(TVec tend)) = expHandler defs e2
+  let (Right (TGridSet playmap playsize@(TVec tplaysize))) = handleGrid grd defs
+  resultPath <- handleRobot playmap playsize start end
+  return $
+    "map size " ++ show tplaysize ++ "\n" ++
+    "obstacles " ++ (show $ map (\(TVec x) -> x) $ Set.toList playmap) ++ "\n" ++
+    "start->end " ++ show tstart ++ "->" ++ show tend ++ "\n" ++
+    resultPath ++ "\n"
+\end{lstlisting}
+
+
+\subsection{Evaluating expressions}
+
+Expressions are handled by the \lstinline{expHandler} function. The signature of \lstinline{expHandler} is
+\begin{lstlisting}[caption={},language=haskell]
+expHandler :: Map String Value -> Exp -> Either String Value
+\end{lstlisting}
+
+Taking the current scope and the expression itself, it will return a Value.
+
+Since expressions are defined as a recursive data type, the general structure of each \lstinline{handleGrid} is to evaluate possible sub-expressions recursively until a base case is reached which returns a \lstinline{Value}. The \lstinline{Value}s can then be merged, depending on the case, into the expected \lstinline{Value} type of the expression.
+
+The simplest \lstinline{expHandler} handles an expression in parantheses. It simply evaluates it.
+\begin{lstlisting}[caption={},language=haskell]
+expHandler defs (ParenExp expr) = expHandler defs expr
+\end{lstlisting}
+
+Integer and Boolean literals are base cases and easy to translate into \lstinline{Values}
+\begin{lstlisting}[caption={},language=haskell]
+expHandler _ (IntegerExp i) = Right $ TInt i
+expHandler _ (BooleanExp b) = Right $ TBool b
+\end{lstlisting}
+
+In order to evaluate an identifier, it is searched for in the scope variables. The value is returned, or an error message is issued.
+\begin{lstlisting}[caption={},language=haskell]
+expHandler defs (VariableExp ident) =
+  case ( Map.lookup ident defs ) of
+    (Just d) -> return d
+    Nothing -> (Left $ "Lookup err - can't find " ++ ident ++ " in  " ++ show defs)
+\end{lstlisting}
+
+\lstinline{List}s and \lstinline{Set}s are evaluated nicely by mapping over them using the monadic \lstinline{mapM}.
+\begin{lstlisting}[caption={},language=haskell]
+expHandler defs (ListExp expList) = do
+  mapped <- mapM ( expHandler defs ) expList
+  return $ TList mapped
+expHandler defs (SetExp expSet) = do
+  mapped <- mapM (expHandler defs) expSet
+  return $ TSet (Set.fromList mapped)
+\end{lstlisting}
+
+Handling binary expressions employs the \lstinline{binaryOperationHandler} function, which pattern matches the operation and executes it over the operands.
+\begin{lstlisting}[caption={},language=haskell]
+expHandler defs (BinaryExp exp1 bop exp2) = do
+  e1 <- expHandler defs exp1
+  e2 <- expHandler defs exp2
+  binaryOperationHandler bop e1 e2
+\end{lstlisting}
+
+We will only present a small subset of them, since most are very similar:
+\begin{lstlisting}[caption={},language=haskell]
+binaryOperationHandler Plus  (TInt i) (TInt j) = Right $ TInt $ i+j
+binaryOperationHandler Shift (TSet s) (TVec (a,b)) = 
+    Right $ TSet $ Set.map (\(TVec (x,y)) -> TVec (x+a, y+b)) s
+binaryOperationHandler Equal (TInt i) (TInt j) = Right $ TBool $ i == j
+binaryOperationHandler Equal (TVec (i1,j1)) (TVec (i2,j2)) = 
+    Right $ TBool $ ( i1 == j1 ) && ( i2 ==  j2)
+binaryOperationHandler Gte (TInt i) (TInt j) = Right $ TBool $ i >= j
+binaryOperationHandler Gte (TVec (i1,j1)) (TVec (i2,j2)) = 
+    Right $ TBool $  ( i1 >= j1 ) && ( i2 >=  j2)
+(...)
+\end{lstlisting}
+
+Unary operations are similar to handling binary operations.
+\begin{lstlisting}[caption={},language=haskell]
+expHandler defs (UnaryExp uop expr) = do
+  e <- expHandler defs expr
+  unaryExpressionHandler uop e
+\end{lstlisting}
+
+
+\begin{lstlisting}[caption={},language=haskell]
+unaryExpressionHandler Not (TBool e) = Right $ TBool $ not e
+unaryExpressionHandler Head (TList (x:_)) = Right x
+unaryExpressionHandler Vecy (TVec (_,b)) = Right $ TInt b
+(...)
+\end{lstlisting}
+
+
+\subsection{Blocks}
+
+Since our language supports blocks, a block evaluator evaluates them in a similar fashion as the \lstinline{Program}. The declarations are evaluated, but instead of handling a grid and a route, a final expression is computed and returned.
+\begin{lstlisting}[caption={},language=haskell]
+blockHandler :: Map String Value -> Block -> Either String Value
+blockHandler defs (Block ((Decl _ ident expr):xs) finalExp) =
+  case (expHandler defs expr) of
+    Left err -> Left $ "BlockHandler1 err: " ++ err
+    Right handledExp -> blockHandler (Map.insert ident handledExp defs) (Block xs finalExp)
+blockHandler defs (Block [] finalExp) = expHandler defs finalExp
+\end{lstlisting}
+
+If expressions and Cond expressions are evaluated in a similarly literal fashion as the rest of the expression handlers so far, using the \lstinline{blockHandler}
+\begin{lstlisting}[caption={},language=haskell]
+expHandler defs (IfExp expr block1  block2) =
+  let (Right (TBool evaluated)) = expHandler defs expr in
+    if evaluated
+      then blockHandler defs block1
+      else blockHandler defs block2
+      
+expHandler defs (CondExp ((expr,block):xs) otherwiseBlock) =
+  let (Right (TBool evaluated)) = expHandler defs expr in
+    if evaluated
+      then blockHandler defs block
+      else expHandler defs (CondExp xs otherwiseBlock)
+expHandler defs (CondExp [] otherwiseBlock) = blockHandler defs otherwiseBlock
+\end{lstlisting}
+
+\subsection{Lambda expressions}
+
+Since a lambda definition cannot be evaluated without it being executed, it gets saved as-is. The current environment, \lstinline{defs}, is saved for the purposes of the closure.
+\begin{lstlisting}[caption={},language=haskell]
+expHandler defs (LambdaExp args retType block) = do
+  return $ TLambda defs args retType block
+\end{lstlisting}
+
+
+Executing a lambda is made difficult by the fact that AROS allows both recursion and currying. The environment we saved as a closure for the function does not include the function itself: the lambda contains a copy of the environment, and the environment copy needs to contain the same lambda, which in turn needs to contain another copy of the environment, and so on, endlessly. Not allowing recursion would eliminate this issue, since the function cannot call itself. But if the function calls itself, it needs to find itself in the environment. A simple trick can be used to make sure the function is able to call itself.
+\par
+When calling a function, the lambda is first found in the scope by its identifier. \lstinline{sident} is the string identifying the lambda. \lstinline{lambda} is pattern matched to a \lstinline{TLambda} to get access to the closure environment. It is then possible to insert it under its own name into the closure environment, which becomes the environment under which the execution will take place. Finally, \lstinline{curryHandler} is called, and we are certain that if it calls itself, it will find the correct lambda in its environment.
+
+\begin{lstlisting}[caption={},language=haskell]
+expHandler defs (ApplicationExp ident params) = do
+  lambda <- expHandler defs ident
+  let (VariableExp sident) = ident
+  let (TLambda env paramNames retType block) = lambda
+  let newenv = Map.insert sident lambda env
+  curryHandler newenv defs paramNames params retType block
+\end{lstlisting}
+
+\lstinline{curryHandler} applies arguments while it can, and either returns a curried function, the result of executing the function, or complains that too many arguments were passed. We disallow constructs such as \lstinline{myFunc(2)(3)(4)}.
+Applying an argument is as simple as updating the closure environment with the value, under the argument's name. Both the closure environment and the original environment are kept since expressions can be passed as arguments which need to be evaluated under the current cope, not the closure.
+If we need to return another function, a new LambdaExp is created with the remaining arguments.
+\begin{lstlisting}[caption={},language=haskell]
+curryHandler :: Map String Value -> Map String Value -> [(DeclType,String)] -> [Exp] -> DeclType -> Block -> Either String Value
+curryHandler closureenv origenv ((_,x):xs) (y:ys) retType block = do
+  evalled <- expHandler origenv y
+  let newenv = Map.insert x evalled closureenv
+  curryHandler newenv origenv xs ys retType block
+curryHandler closureenv _ e@(_:_) [] retType block =
+  return $ TLambda closureenv e retType block
+curryHandler closureenv _ [] [] _ block = blockHandler closureenv block
+curryHandler _ _ [] (_:_) _ _ = Left "Too many args to function"
+\end{lstlisting}
+
+\section{Robot routing}
+
+After computing the necessary information, \lstinline{evaluateProgram} (\cref{evaluator:evaluateprogram2}) calls \lstinline{handleRobot} with a set of obstacles, the size of the area as a vector, and the start and end coordinates for the path. The general idea for the algorithm will be a breadth-first search using a first-in-first-out queue.
+\par
+\lstinline{HandleRobot} unwraps the \lstinline{Value}s into tuples and calls \lstinline{pathRobot}. The queue used by \lstinline{pathRobot} will contain tuples of tuples, where the first tuple is the parent and the second is the coordinates of the square. The parent will later be required to be able to backtrack and find the optimal solution. To mark the start, (-1,-1) is used as the parent. 
+
+\begin{lstlisting}[caption={},language=haskell]
+handleRobot :: (Set Value) -> Value -> Value -> Value -> Either String String
+handleRobot playmap (TVec mapsize) (TVec start) (TVec end) = do
+  let obstacles = Set.map (\(TVec vc) -> vc) playmap
+  case pathRobot mapsize obstacles (Seq.empty Seq.|> ((-1,-1),start)) end of
+    (Right res) -> Right $
+                   instructionsMaker $
+                   reverse $
+                   followParents res end
+    (Left err) -> Left err
+handleRobot _ _ _ _ = Left "Robot err"
+\end{lstlisting}
+
+\lstinline{PathRobot} runs until the finish is found, or the queue is empty. Therefore it starts by making sure there still are elements left. If there are, the queue is popped.
+\par
+If the current node being evaluated is the end vector, we have found the base case. It returns the current head, which is the tuple consisting of the current position and its parent.
+\par
+Otherwise, the \lstinline{obstacles} set is first updated with the current position. This is out of convenience, instead of using a separate \lstinline{visited} set. Then, all neighbours of the current position are tested to ensure they are valid (within the bounds of the map and neither an obstacle or having been visited), then added to the end of the queue. \lstinline{PathRobot} is recursively called with the updated queue, and the current position with its parent is prepended to the result after receiving the result from the call.
+\par
+Therefore, if \lstinline{pathRobot} succeeded, it will return a list of all visited nodes until the end was found.
+
+\begin{lstlisting}[caption={},language=haskell]
+pathRobot :: (Show a, Ord a, Num a) => (a,a) -> Set (a,a) -> Seq ((a,a),(a,a)) -> (a,a) -> Either String [((a,a),(a,a))]
+pathRobot mapsize@(mapx,mapy) obstacles fifo end
+  | Seq.length fifo == 0 = Left "No path"
+  | otherwise = do
+    let h@(_,chead@(xc,yc)) = fifo `Seq.index` 0
+    let restOfFifo = Seq.deleteAt 0 fifo
+    if chead == end then
+      Right $ [h]
+    else do
+      let updatedObstacles = Set.insert chead obstacles
+      let toAddToFifo = filter 
+          (\n@(x,y) -> x>=0 && y>=0 && x<mapx && y<mapy && n `notElem` obstacles )
+          [(xc-1,yc),(xc+1,yc),(xc,yc-1),(xc,yc+1)]
+      let updatedfifo = restOfFifo Seq.>< (Seq.fromList $ map (\x -> (chead,x)) toAddToFifo)
+      result <- pathRobot mapsize updatedObstacles updatedfifo end
+      return $ h : result
+\end{lstlisting}
+
+Going back to \lstinline{handleRobot}, the following is done to the result of \lstinline{pathRobot}:
+
+\begin{center}
+instructionsMaker \$ reverse \$ followParents res end
+\end{center}
+
+\lstinline{FollowParents} returns a list of vectors by following the parents, from the end to the start. It filters the result list for the node it searches for (it is guaranteed it finds one and only one), and gets its parent. It can then return the concatenation of the current node with the recursive call to \lstinline{followParents} with the parent node as the new current node. This is performed until (-1,-1) is found as the parent, which is the base case and the end of the route. 
+\par
+Since \lstinline{followParents} returns the list from end to start, it needs to be reversed.
+
+\begin{lstlisting}[caption={},language=haskell]
+followParents :: (Eq a, Num a) => [((a,a),(a,a))] -> (a,a) -> [(a,a)]
+followParents [] _ = []
+followParents paths node
+  | p == (-1,-1) = [node]
+  | otherwise = node : followParents paths p
+  where
+    (p,_) = head $ filter (\(_,h) -> h == node) paths
+\end{lstlisting}
+
+Finally, the list of coordinates is transformed into a series of instructions by \lstinline{instructionsMaker}. Taking the first two coordinates at a time, it's simply a case of comparing their coordinates to evaluate whether the first is above, below, to the left or to the right of the second one. Knowing this, instructions such as "Up", "Down", "Left" and "Right" are issued. These could easily be transformed into 2-bit codes for easier interpretation.
+
+\begin{lstlisting}[caption={},language=haskell]
+directionToGoMaker :: (Ord a) => (a,a) -> (a,a) -> String
+directionToGoMaker (x1,y1) (x2,y2)
+  | x1 > x2 = "Up"
+  | x1 < x2 = "Down"
+  | y1 > y2 = "Left"
+  | otherwise = "Right"
+
+instructionsMaker :: (Ord a) => [(a,a)] -> String
+instructionsMaker (x:y:xs) = directionToGoMaker x y ++ " " ++ instructionsMaker (y:xs)
+instructionsMaker [_] = "Done."
+instructionsMaker _ = "Empty."
+\end{lstlisting}
+
+\subsection{Complexity}
+
+In order to be able to perform complexity analysis, let $n = x * y$, where x and y are the sizes of the grid, making n the number of vertices in the graph.
+\par
+The parts of the code we are interested in for complexity analysis are \lstinline{handleRobot} and \lstinline{pathRobot}.
+\par
+\lstinline{HandleRobot} takes $O(n)$ to prepare the data for the \lstinline{pathRobot} call, due to \lstinline{Set.map}. The response has length $n$, therefore \lstinline{followParents} will have complexity $O(n^2)$ since the path can be $n$ steps long and it searches for the parent each time ($O(n)$). \lstinline{Reverse} and \lstinline{instructionsMaker} both execute in linear time.
+
+\par
+\newblock
+Since it is recursive, one might be tempted to use the master theorem in analysing the run time complexity of \lstinline{pathRobot}. This is impossible, due to the fact that its recurrence relation is
+
+\begin{center}
+   $T(n) = 4 T(n) + \log n$ 
+\end{center}
+
+thus,
+\begin{itemize}
+    \item $a = 4$
+    \item $b = 1$
+    \item $f(n)=\log n$ (mapping and filtering the graph)
+\end{itemize}
+making $\log_ba$ infinite.
+
+\par
+Executing one iteration of \lstinline{pathRobot} has time complexity $O(\log n)$ due to having to search for the four upcoming elements inside \lstinline{obstacles}, which takes $4\log n = \log n$. Since we used a queue, popping has complexity $O(1)$, and pushing four elements $O(4*1)=O(1)$. 
+\par
+However, due to the design of the algorithm, it will never visit the same node twice. We can therefore be certain of the fact that \lstinline{pathRobot} will execute at \lstinline{most} $n$ times.
+\par
+The complexity of running \lstinline{pathRobot} inside \lstinline{handleRobot} will therefore be $O(n\log n)$.
+
+\par
+In conclusion, the complexity of the pathing algorithm is $O(n^2)$, due to \lstinline{followParents}. Ordering the result by the parent would enable the search to be executed in $\log n$ time, improving the overall complexity to $O(n\log n)$. 

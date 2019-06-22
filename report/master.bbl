@@ -1,0 +1,68 @@
+\begin{thebibliography}{11}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Allen and Moronuki(2016)]{allen2016haskell}
+C.~Allen and J.~Moronuki.
+\newblock \emph{Haskell Programming from First Principles}.
+\newblock Allen and Moronuki Publishing, 2016.
+\newblock ISBN 9781945388033.
+\newblock URL \url{https://books.google.dk/books?id=5FaXDAEACAAJ}.
+
+\bibitem[ANTLR()]{antlr-github}
+ANTLR.
+\newblock Antlr (another tool for language recognition) is a powerful parser
+  generator for reading, processing, executing, or translating structured text
+  or binary files., 2019.
+\newblock URL \url{https://github.com/antlr/antlr4}.
+
+\bibitem[Arduino()]{arduino}
+Arduino.
+\newblock Arduino software, 2019.
+\newblock URL \url{https://www.arduino.cc/en/Main/Software}.
+
+\bibitem[Dornan et~al.(2003)Dornan, Jones, and Marlow]{alexUserGuide}
+Chris Dornan, Isaac Jones, and Simon Marlow.
+\newblock Alex user guide, 2003.
+
+\bibitem[Fischer et~al.(2009)Fischer, Cytron, and LeBlanc]{craftingCompiler}
+Charles~N. Fischer, Ronald~K. Cytron, and Richard~J. LeBlanc.
+\newblock \emph{Crafting A Compiler}.
+\newblock Addison-Wesley Publishing Company, USA, 1st edition, 2009.
+\newblock ISBN 0136067050, 9780136067054.
+
+\bibitem[Grammophone()]{grammophone}
+Grammophone.
+\newblock mdaines/grammophone: A tool for analyzing and transforming
+  context-free grammars., 2019.
+\newblock URL \url{https://github.com/mdaines/grammophone}.
+
+\bibitem[LEGO()]{lego-robotc}
+LEGO.
+\newblock Lego - robotc, 2019.
+\newblock URL \url{http://www.robotc.net/download/lego/}.
+
+\bibitem[Lipovaca(2011)]{learn-you-a-haskell-for-great-good}
+Miran Lipovaca.
+\newblock \emph{Learn You a Haskell for Great Good!: A Beginner's Guide}.
+\newblock No Starch Press, 1st edition, 2011.
+\newblock ISBN 978-1593272838, 9781593272838.
+
+\bibitem[Schwartzbach(1995)]{polymorphic-type-inference}
+Michael~I. Schwartzbach.
+\newblock Polymorphic type inference, 1995.
+
+\bibitem[Sebesta(2012)]{concepts-of-programming-languages}
+Robert~W. Sebesta.
+\newblock \emph{Concepts of Programming Languages}.
+\newblock Pearson, 10th edition, 2012.
+\newblock ISBN 0131395319, 978-0131395312.
+
+\bibitem[Simon~Marlow(2001)]{happyUserGuide}
+Andy~Gill Simon~Marlow.
+\newblock Happy user guide, 2001.
+
+\end{thebibliography}

@@ -1,0 +1,10 @@
+*.aux
+*.lof
+*.log
+*.lot
+*.fls
+*.out
+*.thm
+*.toc
+*.pyg
+master.pdf

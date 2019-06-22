@@ -1,0 +1,872 @@
+\section{Formal specification}\label{section:Specification}
+
+\subsection{Abstract grammar}
+\label{sec:abstract-grammar}
+
+\par
+In this section, we give a formal description of the AROS language, such that it is clear which programs are syntactically valid and which are not. We first define it by means of the abstract grammar. 
+
+\par
+Abstract grammar is a context-free grammar, which provides a clearer, simplified syntactic description of the language. However, compared to a concrete grammar, it may be ambiguous and it is not concerned with e.g. operator precedence, etc. The abstract syntax is defined by a collection of syntactic categories and a finite set of formation rules for every syntactic category.
+
+\par
+The abstract grammar of AROS consists of the following syntactic categories:
+
+
+\begin{align*}
+    & i \in \mathbf {Int} - \text{Integers} \\
+    & b \in \mathbf {Bool} - \text{Booleans} \\
+    & x \in \mathbf {Var} - \text{Variables} \\ 
+    & e \in \mathbf {Exp} - \text{Expression} \\
+    & T \in \mathbf {Type} - \text{Types} \\
+    & P \in \mathbf {Params} - \text{Function parameters} \\
+    & L \in \mathbf {Lambda} - \text{Lambda expression} \\
+    & B \in \mathbf {Block} \\
+    & FA \in \mathbf {FunctionApplication} \\
+    & D \in \mathbf {Dec} - \text{Declaration} \\
+    & G \in \mathbf {GridDef} - \text{Grid definition} \\
+    & R \in \mathbf {RouteDef} - \text{Route definition} \\
+    & Prog \in \mathbf {Program}
+    &&&
+\end{align*}
+
+\newblock
+\par
+An arbitrary element of a syntactic category is represented by meta-variables. For example, $e$ is a meta-variable for expression, L is a meta-variable for lambda, etc. Members of the above mentioned syntactic categories are defined by sets of formation rules:
+
+\begin{flalign*}
+    & T ::= int\\
+        &\quad \quad \: | \: bool \\
+        &\quad \quad \: | \: vec \\
+        &\quad \quad \: | \: [T] \\
+        &\quad \quad \: | \: \{T\} \\
+        &\quad \quad \: | \: ( [T,]^* T \rightarrow T ) \\
+        &\quad \quad \: | \: ( \rightarrow T ) \\ \\
+    & e ::= x \\
+        & \quad \quad | \: i \\
+        & \quad \quad | \: b \\
+        & \quad \quad | \: <e,e> \\
+        & \quad \quad | \: [ [e,]^* e]\\
+        & \quad \quad | \: [ \: ] \\
+        & \quad \quad | \: \{ [e,]^* e \} \\
+        & \quad \quad | \: \{ \: \} \\
+        & \quad \quad | \: (e) \\
+        & \quad \quad | \: o_1 \: e \\
+        & \quad \quad | \: e \: o_2 \: e \\
+        & \quad \quad | \: L \\
+        & \quad \quad | \: FA \\
+        & \quad \quad | \: if(e) \: B \: else \: B\\
+        & \quad \quad | \: cond\{\: [(e) \: B]^+ \: otherwise \: B \} \\
+        & \text{where } \\
+        & \quad o_1 \in \{ not, \: head, \: tail, \: vecx, \: vecy\} \\
+        & \quad o_2 \in \{ +, \: -, \: *, \: / , \: ++, \: : , \: <> , \: >< , \: >> , \: crop , \: and, \: or , \: > , \: < , \: >= , \: <= , \: == , \: != \} \\ \\
+    & FA ::= x \: P \\
+         & \: \: \: \: \quad \quad | \: L \: P \\
+         & \: \: \: \: \quad \quad | \: map (e, e) \\
+         & \: \: \: \: \quad \quad | \: filter (e, e) \\
+         & \: \: \: \: \quad \quad | \: fold (e, e, e)
+    &&&
+\end{flalign*}
+
+\begin{flalign*}
+    & P ::= ([e,]^* \: e) \: | \: ( \lambda ) \\
+    & B ::= \{ \: D \: e \} \\ \\
+    & L ::= ([T \: x,]^* \: T \: x) \rightarrow T \: B \\
+        & \quad \quad | \: \: (\lambda) \rightarrow T \: B \\ \\
+    & D ::= T \: x = e; \: D \: | \: \lambda \\
+    & G ::= grid \: e, \: e \\
+    & R ::= route \: e, \: e \\
+    & Prog ::= D \: G \: R\\
+    &&&
+\end{flalign*}
+
+\par 
+The function type $([T,]^* \: T) \rightarrow T$, is just syntactic sugar, allowing multiple input parameters. However, every function type can be redefined by its equivalent curried form. Therefore the type $(T_1, T_2, T_3 \rightarrow \: T_4)$, can be defined as $(T_1 \rightarrow \: (T_2 \rightarrow \: (T_3 \rightarrow \: T_4)))$. This can be illustrated on the following two functions $f$ and $f'$.
+
+\newblock
+\begin{lstlisting}[language=aros]
+    (int, int, int -> int) f = 
+        (int x, int y, int z) -> int {
+            x * y * z
+    }
+    
+    (int -> (int -> (int -> int))) f' =
+        (int x) -> int {
+           (int y) -> int {
+                (int z) -> int {
+                    x * y * z
+                }
+            }
+        }
+\end{lstlisting}
+
+\newblock
+\par
+We assume that elements of $\textbf{Int}$ are integers, elements of $\textbf{Bool}$ are either $true$ or $false$ and an element of $\textbf{Var}$ is any string containing only letters of Latin alphabet, Arabic numerals and symbol $\_$, starting with a lowercase letter. We can define these categories by means of regular expressions:
+
+
+\begin{align*}
+    & b :== true \: | \: false \\
+    & i :== [-]?[1-9][0-9]^* \: | \: 0 \\
+    & x :== [a-z][a-zA-Z0-9\_]^* \\
+    &&&
+\end{align*}
+
+\subsection{Type system}
+\label{sec:design:formal:type-system}
+\par
+As informally described in section XY, values of expressions in the language can be of type integer, boolean, vector, set, list or a function. Types are defined formally using the formation rules in table XYY. Such recursive definition of lists and sets allows nesting, so that a ``list of sets of integers'', $[ \{int\} ]$, is a valid type. 
+
+\par 
+Similarly, the same principle applies to functions. They can accept other functions as parameters as well as return functions. While a function is only allowed to return one expression of a given type, it can accept an arbitrary number of input parameters, or no parameters at all. The following are examples of function types allowed in AROS:
+
+
+\begin{align*}
+    & (int \rightarrow bool)\\
+    & (int, int \rightarrow vec)\\
+    & ((int \rightarrow bool), [int] \rightarrow [bool])\\
+    & ( \rightarrow (\{vec\} \rightarrow [vec]))\\
+    &&&
+\end{align*}
+
+\par
+Therefore, the set of valid types in AROS $\textbf{Type}$, is infinite: 
+
+\begin{align*}
+    Type = \{ int, bool, vec, [int], [bool], [vec], [[int]], \cdots, (int \rightarrow int), \cdots, (int,(int \rightarrow bool) \rightarrow bool), \cdots \}
+\end{align*}
+
+\newblock
+\par
+Furthermore, we can define two subsets of $\textbf{Type}$:
+
+\begin{align*}
+    & \mathbf{SType} \subset \mathbf{Type} - \text{Standard type} \\
+    & \mathbf{FType} \subset \mathbf{Type} - \text{Function types} \\  
+    & where \: \mathbf{FType} \cap \mathbf{SType} = \emptyset \\
+    &&&
+\end{align*}
+
+Formation rules for each subset can be defined as follows:
+
+\begin{align*}
+    & T_s ::= int \: | \: bool \: | \: vec \: | \: [T] \: | \: \{T\} \text{,where } T_s \in \mathbf{SType} \\
+    & T_f ::= ([T,]^*T \rightarrow T) \: | \: (\rightarrow T) \text{,where } T_f \in \mathbf {FType} \\
+    &&&
+\end{align*}
+
+\newblock
+\par
+According to the abstract grammar, it is syntactically correct to write an expression such as $10+\{true, false\} $. Such expression, of course, does not make sense and it is hard to imagine how a number 10 can be added to a set of Boolean values. The goal of a type system is to ensure type safety by disallowing such expressions.
+
+\par
+Declarations of variables is an essential language construct in AROS. It is necessary to keep track of types of these variables so that we will be able to correctly evaluate expressions containing them. To do this, we use \textit{E} as the type environment. The type environment $E$ can be defined as a partial function: 
+
+\begin{align*}
+    E: Var \rightharpoonup Type
+\end{align*}
+
+where
+\begin{itemize}
+    \item $Var$ is a set of declared variables
+    \item $Type$ is a set of types
+    \newline
+\end{itemize}
+
+\par
+To update a type environment with a new declaration of variable $x$ of type $T$ we write $E[x \longmapsto T]$, obtaining an updated environment $E'$ defined by: 
+
+\begin{align*}
+    E'(y) = \begin{cases} E(y) &\mbox{if } y \neq x \\ 
+   T &\mbox{if } y = x \end{cases}
+\end{align*}
+
+We can now define type rules that describes how types are assigned to syntactic entities. We employ type judgements of the form:     
+
+\begin{align*}
+    E \vdash e : T
+\end{align*}
+
+where:
+\begin{itemize}
+    \item $E$ is a type environment - mapping from declared variables to their types
+    \item $e$ is an expression
+    \item $T$ is a type
+\end{itemize}
+
+\par
+In other words, the above definition states that the expression $e$ has type $T$ relative to the type environment $E$.\newline
+
+\par
+Type judgements are combined into type rules of the following form:
+
+\begin{align*}
+    {\dfrac{J_1; J_2;...;J_n}{J}}
+\end{align*}
+
+where:
+\begin{itemize}
+    \item $J_i$ for $1 \leq i \leq n$ is a premise of the type rule
+    \item $J$ is a conclusion of the type rule
+\end{itemize}
+
+\par
+So that if all the type judgements $J_i$ hold, the conclusion J also holds. We can now describe our type system as follows: 
+\begin{flalign}
+    & [VAR_{EXP}]\quad {\dfrac{E(x) = T}{E \vdash x \colon T}} &
+\end{flalign}
+
+\begin{flalign}
+    & [PAR_{EXP}]\quad {\dfrac{E \vdash x \colon T}{E \vdash(x) \colon T}} &
+\end{flalign}
+
+\begin{flalign}
+    & [INT_{EXP}]\quad {E \vdash i \colon int} &
+\end{flalign}
+
+\begin{flalign}
+    & [INT\_OP_{EXP}]\quad {\dfrac{E \vdash e_1 \colon int; E \vdash e_2 \colon int}{E \vdash e_1 \:  o \:  e_2 \colon int}}\text{, where } o \in \{+,-,*,/\} &
+\end{flalign}
+
+\begin{flalign}
+    & [BOOL_{EXP}]\quad {E \vdash b \colon bool} &
+\end{flalign}
+
+\begin{flalign}
+    & [BOOL\_OP_{EXP}]\quad {\dfrac{E \vdash e_1 \colon bool;E \vdash e_2 \colon bool}{E \vdash e_1 \: o \: e_2 \colon bool}}\text{, where } o \in \{and, or\} &
+\end{flalign}
+
+\begin{flalign}
+    & [BOOL\_COMP_{EXP}]\quad {\dfrac{E \vdash e_1 \colon int;E \vdash e_2 \colon int}{E \vdash e_1 \: o \: e_2 \colon bool}}\text{, where } o \in \{>,<,>=,<=,==,!=\} &
+\end{flalign}
+
+\begin{flalign}
+    & [BOOL\_NEGATION_{EXP}]\quad {\dfrac{E \vdash e \colon bool}{E \vdash not \: e \colon bool}} &
+\end{flalign}
+
+\begin{flalign}
+    & [VEC_{EXP}]\quad {\dfrac{E \vdash e_1 \colon int;E \vdash e_2 \colon int}{E \vdash \langle e_1,e_2 \rangle  \colon vec }} &
+\end{flalign}
+
+\begin{flalign}
+    & [VEC\_UOP_{EXP}]\quad {\dfrac{E \vdash e \colon vec}{E \vdash o \: e \colon int}}\text{, where }o \in \{vecx, vecy \} &
+\end{flalign}
+
+\begin{flalign}
+    & [VEC\_BOP_{EXP}]\quad {\dfrac{E \vdash e_1 \colon vec; E \vdash e_2 \colon vec}{E \vdash e_1 \: o \: e_2 \colon vec}}\text{, where }o \in \{+,-,*,/ \} &
+\end{flalign}
+
+\begin{flalign}
+    & [VEC\_SCAL_{EXP}]\quad {\dfrac{E \vdash e_1 \colon int;E \vdash e_2 \colon vec}{E \vdash e_1 \: * \: e_2 \colon vec}} &
+\end{flalign}
+\label{page:empty-set-list}
+\begin{flalign}
+    & [EMPTY\_LIST_{EXP}]\quad E \vdash [\text{ }] : [T] &
+\end{flalign}
+
+\begin{flalign}
+    & [LIST\_CONS_{EXP}]\quad {\dfrac{E \vdash e_1 \colon T; E \vdash e_2 \colon [T]}{E \vdash e_1 \: \colon \: e_2 \colon [T]}} &
+\end{flalign}
+
+\begin{flalign}
+    & [LIST\_APPEND_{EXP}]\quad {\dfrac{E \vdash e_1 \colon [T];E \vdash e_2 \colon [T]}{E \vdash e_1  ++  e_2 \colon [T]}} &
+\end{flalign}
+
+\begin{flalign}
+    & [LIST\_HEAD_{EXP}]\quad {\dfrac{E \vdash e \colon [T]}{E \vdash head \text{ } e \colon T}} &
+\end{flalign}
+
+\begin{flalign}
+    & [LIST\_TAIL_{EXP}]\quad {\dfrac{E \vdash e \colon [T]}{E \vdash tail \text{ } e \colon [T]}} &
+\end{flalign}
+
+\begin{flalign}
+    & [SET_{EXP}]\quad {\dfrac{E \vdash e \colon T}{E \vdash \{e\} \colon \{T\}}} &
+\end{flalign}
+
+\begin{flalign}
+    & [EMPTY\_SET_{EXP}]\quad {E \vdash \{ \text{ }\} \colon \{T\}} &
+\end{flalign}
+
+\begin{flalign}
+    & [SET\_OP_{EXP}]\quad {\dfrac{E \vdash e_1 \colon \{T\}; E \vdash e_2 \colon \{T\}}{E \vdash e_1 \: o \: e_2 \colon \{T\}}}\text{, where }o \in \{\cup, \cap\} &
+\end{flalign}
+
+\begin{flalign}
+    & [VECTOR\_SET\_OP_{EXP}]\quad {\dfrac{E \vdash e_1 \colon \{vec\}; E \vdash e_2 \colon vec}{E \vdash e_1 \: o \: e_2 \colon \{vec\}}}\text{, where }o \in \{\gg, *,crop\} &
+\end{flalign}
+
+\begin{flalign}
+    & [LAMBDA^1_{EXP}]\quad {
+    \dfrac
+    {E[x_1 \longmapsto T_1, \cdots, x_n \longmapsto T_n] \vdash B \colon T_r}
+    {E \vdash (T_1 \: x_1, \cdots,\: T_n \: x_n) \rightarrow \: T_r \: B \colon ( T_1, \cdots, T_n \rightarrow T_r ) }} &
+\end{flalign}
+
+\begin{flalign}
+    & [LAMBDA^2_{EXP}]\quad {
+    \dfrac
+    {E \vdash B \colon T}
+    {E \vdash ( \lambda) \rightarrow T \: B \colon T }} &
+\end{flalign}
+
+\begin{flalign}
+    & [IF_{EXP}]\quad {\dfrac{E \vdash e \colon bool; E \vdash B_1 \colon T; E \vdash B_2 \colon T}{E \vdash if(e) B_1  \text{ else } B_2 \colon T}} &
+\end{flalign}
+
+\begin{flalign}
+    & [COND_{EXP}]\quad {\dfrac{E \vdash e_1 \colon bool; \cdots ; E \vdash e_n \colon bool ; E \vdash B_1 \colon T; \cdots ; E \vdash B_n \colon T, E \vdash B_o \colon T}{E \vdash cond\{ (e_1) B_1 \cdots (e_n) B_n \text{ otherwise } B_o\} \colon T}} &
+\end{flalign}
+
+\begin{flalign}
+    & [APP\_VAR_{EXP}]\quad {\dfrac
+        {E \vdash x \colon (T_1, \cdots,T_n \rightarrow T_r); E \vdash P \colon T_1, \cdots, T_n}
+        {E \vdash x \: P \colon T_r}
+    } &
+\end{flalign}
+
+\begin{flalign}
+    & [APP\_LAMBDA_{EXP}]\quad {\dfrac
+        {E \vdash L \colon (T_1, \cdots,T_n \rightarrow T_r); E \vdash P \colon T_1, \cdots, T_n}
+        {E \vdash L \: P \colon T_r}
+    } &
+\end{flalign}
+
+\begin{flalign}
+    & [APP\_EMPTY_{EXP}]\quad {\dfrac
+        {E \vdash L \colon (\rightarrow T)}
+        {E \vdash L \: (\lambda) \colon T}
+    } &
+\end{flalign}
+
+\begin{flalign}
+    & [APP\_MAP_{EXP}]\quad {\dfrac
+        {E \vdash e_1 \colon (T_1 \rightarrow T_2); E \vdash e_2 \colon [T_1]}
+        {E \vdash map(e_1, \: e_2) \colon [T_2]}
+    } &
+\end{flalign}
+
+\begin{flalign}
+    & [APP\_FILTER_{EXP}]\quad {\dfrac
+        {E \vdash e_1 \colon (T \rightarrow Bool); E \vdash e_2 \colon [T]}
+        {E \vdash filter(e_1, \: e_2) \colon [T]}
+    } &
+\end{flalign}
+
+\begin{flalign}
+    & [APP\_FOLD_{EXP}]\quad {\dfrac
+        {E \vdash e_1 \colon (T_1, \: T_2 \rightarrow T_1); E \vdash e_2 \colon T_1; E \vdash e_3 \colon [T_2]}
+        {E \vdash fold(e_1, \: e_2, \: e_3) \colon T_1}
+    } &
+\end{flalign}
+
+\begin{flalign}
+    & [PARAMS]\quad {\dfrac
+        {E \vdash e_1 \colon T_1; \cdots; E\vdash e_n \colon T_n}
+        {E \vdash (e_1,\cdots,e_n) \colon T_1,\cdots,T_n}
+    }
+    &
+\end{flalign}
+
+\begin{flalign}
+    & [BLOCK]\quad {\dfrac
+        {E \vdash D \: e \colon T}
+        {E \vdash \{ D \: e \} \colon T}
+    } &
+\end{flalign}
+
+\begin{flalign}
+    & [EMPTY_{DEC}]\quad {
+        \dfrac
+        {E \vdash G \colon ok; E \vdash R \colon ok}
+        {E \vdash \lambda \: G \: R \colon ok}
+    } &&&
+\end{flalign}
+
+\begin{flalign}
+    & [VAR_{DEC}]\quad { 
+        \dfrac
+        {E[x \longmapsto T] \vdash D \: G \: R \colon ok; E \vdash e \colon T}
+        {E \vdash T \: x =e; \: D \: G \:R \colon ok}
+        \text{,where } T \in \mathbf{SType}
+    } &&&
+\end{flalign}
+
+\begin{flalign}
+    & [VAR\_REC_{DEC}]\quad 
+    {
+        \dfrac
+        {E[x \longmapsto T] \vdash D \: G \: R \colon ok; E[x \longmapsto T] \vdash e \colon T}
+        {E \vdash T \: x =e; \: D \:G \:R \colon ok}
+        \text{,where } T \in \mathbf{FType}
+    }&&&
+\end{flalign}
+
+\begin{flalign}
+    & [EMPTY\_BLOCK_{DEC}]\quad {
+        \dfrac
+        {E \vdash e \colon T}
+        {E \vdash \lambda \: e \colon T}
+    }&&&
+\end{flalign}
+
+\begin{flalign}
+    & [VAR\_BLOCK_{DEC}]\quad {
+        \dfrac
+        {E[x \longmapsto T] \vdash D \: e' \colon T';E\vdash e \colon T}
+        {E \vdash T \: x = e; D \: e' \colon T'}
+        \text{,where } T \in \mathbf{SType}
+    }&&&
+\end{flalign}
+
+\begin{flalign}
+    & [VAR\_BLOCK\_REC_{DEC}]\quad
+    {
+        \dfrac
+        {E[x \longmapsto T] \vdash D \: e' \colon T';E[x \longmapsto T]\vdash e \colon T}
+        {E \vdash T \: x = e; D \: e' \colon T'}
+        \text{,where } T \in \mathbf{FType}
+    }&&&
+\end{flalign}
+
+\begin{flalign}
+    & [GRID]\quad {\dfrac
+        {E \vdash e_1 \colon vec; E \vdash e_2 \colon \{vec\}}
+        {E \vdash grid \: e_1, \: e_2 \colon ok}
+    } &
+\end{flalign}
+
+\begin{flalign}
+    & [Route]\quad {\dfrac
+        {E \vdash e_1 \colon vec; E \vdash e_2 \colon vec}
+        {E \vdash route \: e_1, \: e_2 \colon ok}
+    } &
+\end{flalign}
+
+\newblock
+\par
+After defining our type system, we can easily observe that the previously mentioned expression: $10 + \{true, false\}$, is a bad expression that is not typable because there is no type rule defining how to add an integer to a set of Booleans.
+
+\par
+Some type rules are applicable to any types. For example, the type rule 2.23 states, that a $if expression$ can be of any type, as long as its condition $b$ has type Boolean and both blocks are of the same type. 
+
+\par
+We can now employ these type rules and claim that the function on SNIPPET-XY has type $(vec, int \rightarrow [vec])$ and its declaration is $ok$. 
+
+\newblock
+\begin{lstlisting}[language=aros]
+(vec, int -> [vec]) hr = 
+    (vec s, int l) -> [vec] {
+        if(l == 0){
+            []
+        }
+        else{
+            int l'= l-1;
+            int x = vecx s;
+            int y = vecy s + l';
+            <x, y> : hr(s, l')
+        }
+}
+\end{lstlisting}
+
+\newblock
+\par
+However, for simplicity reasons, the sample program contains neither a grid nor a route definition and only consists of a single declaration. To validate it, we have to alter global declaration rules, such that, they do not require a grid and route after declarations:
+
+\begin{flalign}
+    & [VAR\_TEMP\_REC_{DEC}]\quad 
+    {
+        \dfrac
+        {E[x \longmapsto T] \vdash \text{D} \colon ok; E[x \longmapsto T] \vdash e \colon T}
+        {E \vdash T \: x =e; \: D \colon ok}
+        \text{,where } T \in \mathbf{FType}
+    }&&&
+\end{flalign}
+
+\begin{flalign}
+    & [EMPTY\_TEMP_{DEC}]\quad {E \vdash \lambda \colon \text{ok}} &&&
+\end{flalign}
+
+\begin{align*}
+        \dfrac
+        {
+            \dfrac
+            {
+            }
+            {E[hr \longmapsto (vec, int \rightarrow [vec])] = E^1 \vdash \lambda \colon ok;}
+            \quad
+            \dfrac
+            {
+                \dfrac
+                {...}
+                {E^1[s \longmapsto vec, l \longmapsto int] = E^2 \vdash Block_1 \colon [vec]}
+            }
+            {E^1 \vdash (vec \: s,\: int \:l) \rightarrow [vec] \:  Block_1 \colon (vec, int \rightarrow [vec])}
+        }
+        {
+            E \vdash (vec, int \rightarrow [vec]) hr = (vec \: s,int \: l) \rightarrow [vec] \: Block_1 \colon ok 
+        }
+\end{align*}
+
+where $Block_1$ is a substitution for the body of the function $hr$.
+
+\newblock
+\par
+In order to employ the appropriate type rule, we have to examine the nature of this declaration. It is easy to observe that $hr$ is a function. However, it is also a recursive function, because it is applied directly in its body. To deal with this, we have to use a type rule restricted to the functional declaration - $[VAR\_TEMP\_REC_{DEC}]$. The difference between $[VAR\_REC_{DEC}]$ (or the altered $[VAR\_TEMP\_REC_{DEC}]$) and $[VAR_{DEC}]$ is that the former updates the type environment for both premises. Therefore, when the derivation tree reaches the function application, the variable $hr$ can be looked up in the type environment. Such recursive declarations have been restricted to functional types, since declarations such as $int \text{ } x = 5 * x$ do not make sense in a context of declarative programming language, without assignments or mutations. 
+
+\par
+$E^1$ is the updated environment $E$ with variable $hr$ of type $(vec,int \rightarrow [vec])$. Since there are no other declarations, we can apply the $[EMPTY\_TEMP_{DEC}]$ rule, reaching an axiom stating that an empty declaration is $ok$. Furthermore, we have to verify that the expression on the right-hand side of the declaration does have the stated type. Employing the $[LAMBDA^1_{EXP}]$ rule, we first update the environment $E^1$ with function parameters and their types. It is important to note, that if there were other declarations in the sample program, this update would not leak to other branches of the derivations tree, preserving the scope of the function. Next, we have to verify that the function body evaluates to the expected return type. To progress the right branch of the derivation tree, we substitute back the function body for $Block_1$.
+
+
+
+\begin{align*}
+    \dfrac
+    {
+        \dfrac
+        { \dfrac
+        {
+            \dfrac{\dfrac{}{E^2(l) = int}}{E^2 \vdash l \colon int;}
+            \dfrac{}{E^2 \vdash 0 \colon int}
+        }
+        {E^2 \vdash l == 0 \colon bool;}
+        \quad
+        \dfrac
+        {\:}
+        {E^2 \vdash [ \: ] \colon [vec];} 
+        \quad
+        \dfrac
+        {...}
+        {E^2 \vdash Block_2 \colon [vec]}}
+        {E^2 \vdash if (l == 0) \{ [ \: ] \} \: else \: Block_2 \colon [vec]}
+    }
+    {
+        E^2 \vdash \{ \: if (l == 0) \{ [ \: ] \} \: else \: Block_2 \: \} \colon [vec]
+    }
+\end{align*}
+
+where $Block_2$ is a substitution for the body of the else block.
+
+\par
+To continue the derivation we first use the $[BLOCK]$ rule to remove the outer curly brackets. Then, by application of the $[IF_{EXP}]$ type rule, we check that the condition is of type Bool and that both blocks return type $[vec]$. To validate the type of the Boolean expression, we employ the $[BOOL\_COMP_{EXP}]$ rule and check that both variable $l$ and $0$ are integers. The variable $l$ can be looked up in the type environment $E^2$ since:
+
+\begin{flalign}
+    E^2 = hr:(vec,int \rightarrow [vec]), s:vec, l:int   
+\end{flalign}
+
+\newblock
+\par
+The first block of the $if expression$ is an axiom $[EMPTY\_LIST_{EXP}]$. We can now substitute back $Block_2$ and continue the derivation.
+
+\begin{align*}
+    \dfrac
+    {
+        \dfrac
+        {
+        \dfrac
+            {\dfrac{\dfrac{}{E^2(l) = int}}{E^2 \vdash l \colon int;}
+             \dfrac{}{E^2 \vdash 1 \colon int}
+            }
+            {E^2 \vdash l - 1 \colon int;}
+        \dfrac
+            {
+                \dfrac
+                {
+                    \dfrac
+                    {
+                        \dfrac
+                        {}
+                        {E^3(s) = vec}
+                    }
+                    {E^3 \vdash s \colon vec}
+                }
+                {E^3 \vdash vecx \: s \colon int; }
+                \quad
+                \dfrac
+                {...}
+                {E^3[x \longmapsto int] = E^4 \vdash Decs_1 \: Exp_1 \colon [vec]}
+            }
+            {E^2[l' \longmapsto int] = E^3 \vdash int \text{ } x = vecx  \text{ }  s; Decs_1 \: Exp_1 \colon [vec]}
+        }
+        {E^2 \vdash int \: l' = l - 1; int \text{ } x = vecx \: s; Decs_1 Exp_1 \colon [vec]}
+    }
+    {E^2 \vdash \{ \: int \text{ } l' = l - 1; int \text{ } x = vecx \text{ } s; Decs_1 Exp_1 \} \: \colon [vec]}
+\end{align*}
+
+where $Decs_1$ is a substitution for the reminding declarations and $Exp_1$ is an expression in the else block. 
+
+\newblock
+\par
+To confirm that the else block does evaluate to type $[vec]$, we again start by applying the $[BLOCK]$ rule. Then we have to recursively apply rule $[VAR\_BLOCK_{DEC}]$ and validate that each local declaration holds. Local declarations also update the type environment. The expression $l - 1$ is verified using the $[INT\_OP_{EXP}]$ rule and expression $vecx \text{ } s$ is verified using the $[VEC\_UOP_{EXP}]$ rule. We can now substitute back the remaining declarations and the expression.
+
+\begin{align*}
+    \dfrac
+    {
+        \dfrac
+        {
+            \dfrac
+            {
+                \dfrac
+                {\dfrac{}{E^4(s) = vec}}
+                {E^4 \vdash s \colon vec}
+            }
+            {E^4 \vdash vecy \text{ } s \colon int;} 
+            \dfrac
+            {\dfrac{}{E^4(l') = int}}
+            {E^4 \vdash l' \colon int}}
+        {E^4 \vdash vecy \: s + l' \colon int}
+        \dfrac
+        {
+            \dfrac
+            {
+                \dfrac
+                {
+                    \dfrac
+                    {\dfrac{}{E^5(x) = int}}
+                    {E^5 \vdash x \colon int}
+                    \dfrac
+                    {\dfrac{}{E^5(y) = int}}
+                    {E^5\vdash y \colon int}
+                }
+                {E^5 \vdash (x,y) \colon vec}
+                \dfrac
+                {...}
+                {E^5 \vdash hr(s,l') \colon [vec]}
+            }
+            {E^5 \vdash (x,y) \colon hr (s, l') \colon [vec]}
+        }
+        {E^4[y \longmapsto int] = E^5 \vdash \lambda (x,y) \colon hr (s, l') \colon [vec]}
+    }
+    {E^4 \vdash int \: y = vecy \: s + l'; (x, y) \colon hr(s, l') \colon [vec]}
+\end{align*}
+
+\newblock
+\par
+We continue with the recursive application of the $[VAR\_BLOCK_{DEC}]$ type rule. Similarly to previous declarations, the expression on the right hand side, $vecy \text{ } s + l'$, is validated by rules $[INT\_OP_{EXP}]$ and $[VEC\_UOP_{EXP}]$. After concluding that the last local declaration in the else block is type safe, we use the $[EMPTY\_BLOCK_{DEC}]$ rule. Now we just have to verify the remaining block expression. The expression is a cons operation and so the $[LIST\_CONS_{EXP}]$ rule is used. The following derivation verifies that the expression $hr(s,l')$ has type $[vec]$.
+
+\begin{align*}
+    \dfrac
+    {
+        \dfrac
+        {\dfrac{}{E^5(hr) = (vec,int \rightarrow [vec])}}
+        {E^5 \vdash hr \colon (vec,int \rightarrow [vec])}
+        \quad
+        \dfrac
+        {
+            \dfrac
+            {\dfrac{}{E^5(s) = vec}}
+            {E^5 \vdash s \colon vec}
+            \dfrac
+            {\dfrac{}{E^5(l') = int}}
+            {E^5 \vdash l' \colon int}
+        }
+        {E^5 \vdash (s,l') \colon vec,int}
+    }
+    {E^5 \vdash hr(s,l') \colon [vec]}
+\end{align*}
+
+\newblock
+\par
+The expression $hr(s,l')$ is a function application and so we use the $[APP\_VAR_{EXP}]$ type rule. Furthermore, we have to check that function parameters hold and so we apply the $[PARAMS]$ rule. Since all variables $hr$, $s$ and $l'$ have the expected type in the type environment, the derivation tree is completed and the original conclusion $(vec, int \rightarrow [vec]) hr = (s,l) \rightarrow Block_1 \colon ok$ therefore holds. Hence, we have proven that the declaration of function $hr$ is type safe. 
+
+\subsection{Syntax and type inference}
+
+\newblock
+\par
+In this section we will reflect upon some decisions that have influenced the syntax of AROS. Recall the syntax of a function declaration on the following example:
+
+\newblock
+\begin{lstlisting}[language=aros]
+(int -> int) f = (int x) -> int {x};
+\end{lstlisting}
+
+\newblock
+\par
+Notice that the type of the function $f$ is explicitly written on both the right hand side and left hand side of the declaration. Arguably, a more friendly syntax would not require to repeat the type twice, in order to declare a function:
+
+\newblock
+\begin{lstlisting}[language=aros]
+(int -> int) f = (x) -> {x};
+\end{lstlisting}
+
+\newblock
+\par
+An issue with such implicitly typed lambda expression stems in the fact that functions in AROS can both return functions and accepts functions as parameters. Therefore, there exist expressions in AROS, for which it is not possible to infer their type without the use of type parameters. This means, that a derivation tree cannot be constructed deterministically and more than one type rule can be used. An example of this is the following declarations:
+
+\newblock
+\begin{lstlisting}[language=aros]
+    (vec -> vec) f = (y) -> {y}(x -> {2 * x});
+    
+    (int -> int) f' = (y) -> {y}(x -> {2 * x});
+\end{lstlisting}
+
+\par
+\newblock
+The function $(y) \rightarrow \{ \: y \: \}$ is an identity function. Both declarations have the same right-hand side, however, vary in their type. When we attempt to construct a derivation tree for the right-hand side expression, we will have to make a non-deterministic choice of which type rule to apply. The following is the derivation tree of the lambda expression of the first declaration: 
+
+\begin{align*}
+    \dfrac
+    {
+        \dfrac
+        {...}
+        {E \vdash y \rightarrow \{ \: y \} \colon (T \rightarrow (vec \rightarrow vec));}
+        \quad
+        \dfrac
+        {
+            \dfrac
+            {
+                \dfrac
+                {...}
+                {E[x \longmapsto S] \vdash \: 2 \: * \: x \: \colon S'}
+            }
+            {E[x \longmapsto S] \vdash \{ \: 2 \: * \: x \: \} \colon S' \text{, where } (S \rightarrow S') = T}
+        }
+        {E \vdash x \rightarrow \{ \: 2 \: * \: x \: \} \colon T}
+    }
+    {
+        E \vdash y \rightarrow \{ \: y \: \}(x \rightarrow \{ \: 2 \: * \: x \: \}) \colon (vec \rightarrow vec)
+    }
+\end{align*}
+
+\newblock
+\par
+We start by using the $[APP\_LAMBDA_{EXP}]$ rule and, since we do not yet know what its input type is, we substitute it with $T$. Following the right side of the derivation tree, we apply the $[LAMBDA^1_{EXP}]$ rule discovering that the type $T$ is an arrow type, namely $(S \rightarrow S')$. Next, we use the $[BLOCK]$ rule, removing the curly brackets. 
+
+\par
+At this point in the derivation tree, we can choose to apply two different type rules. $x$ can either be of type $int$ or $vec$. For the former, we apply rule $[INT\_OP_{EXP}]$. For the latter, we can perform scalar multiplication with rule $[VEC\_SCAL_{EXP}]$.
+
+\par
+One of the ways to solve this problem is by inferring the type with the use of polymorphism. However, such implementation would be beyond the scope of the project. Another solution would be to simply throw a compilation error, whenever the type rules cannot be chosen deterministically. Consequently, expressions, like the one above, would not be typable and rejected by our compiler. Similarly, we could disallow passing function types as parameters to other functions, which would significantly reduce the capabilities of AROS, because functions would no longer be treated as "first class citizens". Instead, we decided to change the syntax of the lambda expression, such that it contains both parameter types and a return type. The following is the conclusion of the above-mentioned tree after the syntax was modified.
+
+\begin{align*}
+    J_0 = E \vdash ((vec \rightarrow vec) y) \rightarrow (vec \rightarrow vec) \{ \: y \: \}((vec \: x) \rightarrow vec \{ \: 2 \: * \: x \: \}) \colon (vec \rightarrow vec)
+\end{align*}
+
+\newblock
+\par
+Using the $[APP\_LAMBDA_{EXP}]$ rules, we get the following two type judgements:
+
+\begin{align*}
+    & J_1 = E \vdash ((vec \rightarrow vec) y) \rightarrow(vec \rightarrow vec)\{y\} \colon ((vec \rightarrow vec) \rightarrow (vec \rightarrow vec)) \\
+    & J_2 = E \vdash (vec \: x) \rightarrow vec \{\: 2 \: * \: x \: \} \colon (vec \rightarrow vec)  \\
+    &&&
+\end{align*}
+
+\newblock
+\par 
+Applying the $[LAMBDA^1_{EXP}]$ on judgement $J_2$, we get the following:
+
+\begin{align*}
+    J_3 = E[x \longmapsto vec] \vdash \{ \: 2 \: * \: x \: \} \colon vec
+\end{align*}
+
+\newblock
+\par
+After we use the $[BLOCK]$ rule on judgement $J_3$, the only type rule we can apply is the $[VEC\_SCALA_{EXP}]$ rule and we can, therefore, claim that the derivation tree can be constructed deterministically, given the modified syntax.
+
+\subsection{Curry–Howard isomorphism}
+
+\newblock
+\par
+The notation of our type rules defined in section \cref{sec:design:formal:type-system} stems in their connection with logic. This connection is known as the Curry-Howard isomorphism and it describes the correspondence between \textit{types and formulas} and \textit{expressions and proofs}. The types $T$ correspond to facts and the constructor $\rightarrow$ corresponds to logical connective $\implies$. \cite[p. 10]{polymorphic-type-inference} If we ignore the expressions in our type judgements and apply isomorphism, we end up with inference rules from logic. We can modify our $[LAMBDA^1_{EXP}]$ rule, such that a function can only accept a single parameter (this is valid because AROS supports currying). Furthermore, we will ignore the notation for the update of the environment $E$. We will then end up with the \textit{deduction} inference rule:
+
+\begin{flalign}
+    &\dfrac
+    {E, x \colon T_1 \vdash B \colon T_2}
+    {E \vdash (T_1 \: x) \rightarrow \: T_2 \: B \colon ( T_1 \rightarrow T_2 ) }
+    \quad \quad \quad \quad
+    \xrightarrow{\text{corresponds to}}
+    \quad
+    \dfrac
+    {E, T_1 \vdash T_2}
+    {E \vdash T_1 \implies T_2}
+    &&&
+\end{flalign}
+
+\newblock
+\par 
+The $[LAMBDA\_APP_{EXP}]$ rules corresponds to \textit{modus ponens}:
+
+\begin{flalign}
+    &\dfrac
+    {E \vdash L \colon (T_1 \rightarrow T_2); E \vdash P \colon T_1}
+    {E \vdash L \: P \colon T_2}
+    \quad \quad \quad \quad \quad
+    \xrightarrow{\text{corresponds to}}
+    \quad
+    \dfrac
+    {E \vdash T_1 \implies T_2; E \vdash T_1}
+    {E \vdash T_2}
+    &&&
+\end{flalign}
+
+\newblock
+\par
+Using the principles described above, we can determine whether a type of an expression is correct, by confirming that the corresponding formula is a tautology. Consider the following type $T$:
+
+\begin{align*}
+    T = (int \rightarrow vec) \rightarrow ((bool \rightarrow int) \rightarrow (bool \rightarrow vec))
+\end{align*}
+
+A corresponding formula looks as follows:
+
+\begin{align*}
+    (A \implies B) \implies ((C \implies A) \implies (C \implies B))
+\end{align*}
+
+We can prove that the formula is a tautology:
+
+\begin{tabular}{c*{7}{|c}}
+    \multicolumn{3}{c}{}&
+    \multicolumn{1}{c}{%
+    }
+    &\multicolumn{1}{c}{}&
+    \multicolumn{1}{c}{%
+    }\\[-1ex]
+    $A$ & $B$ & $C$ & $A \implies B = X$ & $C \implies A = Y$ & $C \implies B = Z$ & $Y \implies Z$ & $X \implies (Y \implies Z)$\\
+    \hline
+    1 & 1 & 1 & 1 & 1 & 1 & 1 & 1\\
+    1 & 1 & 0 & 1 & 1 & 1 & 1 & 1\\
+    1 & 0 & 1 & 0 & 1 & 0 & 0 & 1\\
+    1 & 0 & 0 & 0 & 1 & 1 & 1 & 1\\
+    0 & 1 & 1 & 1 & 0 & 1 & 1 & 1\\
+    0 & 1 & 0 & 1 & 1 & 1 & 1 & 1\\
+    0 & 0 & 1 & 1 & 0 & 0 & 1 & 1\\
+    0 & 0 & 0 & 1 & 1 & 1 & 1 & 1\\
+\end{tabular}
+$\\$
+\newblock
+\par
+We can therefore conclude that the type T is a valid type in AROS. The following is an example of implementation of this type. Looking at the function from perspective, it states that once providing a function converting type A to type B, we can obtain another function. This newly obtained function accepts a function converting type C to type A and produces a function converting a type C to type B. In other words, we can perform conversion from C to B, merely by providing conversion from C to A and A to B.    
+
+\newpage
+\begin{lstlisting}[language=aros]
+((int -> vec) -> ((bool -> int) -> (bool -> vec))) f =
+    (((int -> vec) g) -> ((bool -> int) -> (bool -> vec))) {
+        (((bool -> int) h) -> (bool -> vec)) {
+            ((bool b) -> vec) {
+                g(h(b))
+            }
+        }
+    };
+
+(int -> vec) f_int_vec = ((int x) -> vec) {
+    <x,x>
+};
+    
+((bool -> int) -> (bool -> vec)) f_converter = f(f_int_vec);
+        
+(bool -> int) f_bool_int =
+    (bool b) -> int {
+        if(b){
+            1
+        }
+        else{
+            0
+        }
+    }
+    
+(bool -> vec) f_bool_vec = 
+    f_converter(
+        f_bool_int
+    );
+\end{lstlisting}

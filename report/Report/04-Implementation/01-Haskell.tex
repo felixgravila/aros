@@ -1,0 +1,50 @@
+\section{Implementation language - Haskell}
+\label{sec:haskell}
+We have chosen the functional programming language Haskell to be the language in which all the components of the system should be implemented. In this section, we will elaborate on this choice and talk about a subset of the philosophies and features of Haskell, that led us to consider Haskell as a suitable language for this project.
+\subsection{Functional paradigm}
+One of the main characteristics of Haskell is that it is a purely functional language. We believe this is a good choice, as the paradigm of AROS, the language we are implementing, is also functional. We believe this alignment of paradigms is useful, as it allows us to think about the implementation and the language itself in similar concepts and terminology. 
+\subsection{Type system}
+Another property that Haskell is known for is its powerful type system. In Haskell, a substantial portion of the implementation logic can be expressed and enforced using types and type classes, which allows us to catch the majority of errors at the time of compilation, instead of during run-time.
+\par
+Apart from the practical benefits, we believe that learning Haskell and exploring its advanced type system provided us with inspiration for thinking about AROS, which is also statically typed.
+\subsection{Algebraic data types}
+A specific feature of Haskell that we find useful for implementing a language is algebraic data types (ADTs). In Haskell, a data type can be in general thought of as \textit{an enumeration of constructors that have zero or more arguments}. Algebraic data types provide a way to define custom data types as sums (alternatives) and/or products (combinations) of multiple different constructors. ADTs can be recursive and are therefore a good fit for defining recursive data structures such as trees, which are at the core of implementing a programming language. \cite{allen2016haskell}
+\subsection{Pattern matching}
+Another notable feature of Haskell is pattern matching. Pattern matching provides a construct for matching values against a diversity of patterns derived from the very syntax of the language.\cite{allen2016haskell} For example a list structure in Haskell can be define as the cons operation of a head (\lstinline{x}) and a tail(\lstinline{xs}) of a list: \lstinline{x : xs}. This same syntax can be used as a pattern, against which we can match a (list) value to extract its head and tail.
+\par
+This same concept also applies to the aforementioned types and type constructors. Therefore, in Haskell, the combination of algebraic data types and pattern matching represents a concise, yet powerful tool for traversing and operating on recursive data structures such as the trees involved in language implementation.
+\begin{lstlisting}[language=Haskell,float=h,
+caption=Example of pattern matching on algebraic data types in Haskell,
+label=lst:pattern-matching]
+    -- Expression can be either an integer value or a plus operation on two integers
+    data Expression = IntExp Int | PlusExp Int Int
+    
+    -- In case of integer value
+    printExp (IntExp i) = print i
+    -- In case of plus operation
+    printExp (PlusExp i1 i2) = print $ (show i1) <> " + " <> (show i2)
+\end{lstlisting}
+\begin{minted}{haskell}
+\end{minted}
+
+An example of this combination is depicted in \cref{lst:pattern-matching}, where a simple \lstinline{Expression} ADT is defined (line 2) as a sum type of two different constructors. The function \lstinline{printExp} is then defined using pattern matching on its first argument, the value of type \lstinline{Expression} (lines 4-7). The patterns used correspond directly to the type constructors of the \lstinline{Expression} type and provide an easy-to-follow branching flow of the function.
+\par 
+% In this use-case, pattern matching and ADTs together represent an alternative, functional approach to the visitor design pattern often used in object-oriented implementations. We will use this approach extensively throughout the implementation.
+\subsection{Alternatives}
+Having described our choice of Haskell in previous subsections, it is important to clarify that there are other patterns and languages that are popular choices and equally fitted for this task. 
+\par
+The implementation of compilers has also been performed and studied in the context of object-oriented languages such as Java or C\#. In this context, there also exist patterns and abstractions designed to deal with processing abstract syntax trees.
+\subsubsection{AST representation}
+A common object-oriented approach to represent abstract syntax trees is to design a \textit{node class hierarchy}, utilizing the concept of classes and inheritance. As an example, let us take the simple expressions from \cref{lst:pattern-matching}. To represent this, an abstract class \lstinline{Expression} could be defined. The different forms of expressions could then be represented as classes (\lstinline{IntExp} and \lstinline{PlusExp}) that would extend (inherit from) the abstract \lstinline{Expression} class, with parameters defined in their constructors. \cite[Section~7.7.1]{craftingCompiler}
+
+\subsubsection{AST traversal}
+A popular object-oriented approach for traversing the AST is to use the visitor design pattern to be able to generically and separately define AST traversals for each phase of the compiler. Using the visitor design pattern, each traversal (phase) is defined in a specific extension of a \lstinline{Visitor} class, which contains a generic \lstinline{Visit} method. The extensions (subclasses), particular to each phase, then use method overloading to define more \lstinline{Visit} methods, for every type of node in the AST. Additionally, in the node classes, \lstinline{accept} methods are defined, which accept any visitor class and invoke its visit method. \cite[Section~7.7.2]{craftingCompiler} 
+\par 
+To sum up, the visitor pattern ensures that the right method will be dispatched given a concrete AST node, while also making it possible to encapsulate the AST traversal logic of different phases inside separate classes.  
+
+\subsection{Conclusion}
+In this section, we have presented our choice of implementation language and paradigm, while also describing the features of Haskell and functional programming that we found relevant for our considerations. Additionally, we have also described an alternative approach we could have taken, namely using object orientation and the visitor design pattern.
+\par
+For our use-case, i.e. representing and traversing abstract syntax tree structures, we think both approaches could be employed. However, to us, completing these tasks using the functional paradigm felt more efficient, natural and easier to follow. Specifically, we prefer the recursive nature of algebraic data types, which are themselves trees, for the representation of abstract syntax trees. Additionally, we also prefer using pattern matching on ADTs instead of the visitor pattern, as we found it more concise and more readable.
+
+\pagebreak

@@ -1,0 +1,31 @@
+\chapter{Introduction}
+\label{chap:Intro}
+
+\par
+The concept of autonomous robots, while not new, has been gaining increasing popularity recently due to the increase in computing power and miniaturisation. While only a few years ago autonomous robots would have low mobility and constrained to work in strictly controlled factories and warehouses, countless modern robots are being sold at affordable prices and with enough hardware to be able to execute complex tasks. Such examples of robots are vacuum cleaner robots, lawnmower robots, drones and quad-copters, etc.
+\par
+Due to their complexity, it is very difficult to program such a robot. They usually fall into one of two categories: either they are fully autonomous (a vacuum cleaner robot figures itself what it needs to do), or not at all (drones need to be flown by hand, or have a very basic `fly-home` system). Smart programmers have been able to reverse engineer robots and create their own, personalised control systems, but this is not something for the layman who might perhaps just want to tell their mower to avoid the rose bushes.
+\par
+The difficulty consists in the fact that most people can not program and thus would be unable to simply code complex routines and use the sensors that the machine provides. To solve this problem, LEGO has created ROBOTC\cite{lego-robotc}, an integrated environment targeted to children and people who cannot otherwise program, which enables them to create routines for their MINDSTORM sets. The ARDUINO\cite{arduino} platform resides in a similar problem space, however, a programming language very similar to C is used to program it.
+\par
+The problem with both of these approaches is that they are striving to teach programming instead of solving a problem and facilitating the actual problem-solving aspect. Both languages being imperative, the programmer needs to precisely control the entire process.
+
+\par
+In this paper, we introduce AROS. Standing for "Autonomous Robot Organisation System", it is a new programming language that attempts to allow for easier creation of programs that aim to navigate an agent in a two-dimensional space. Being a declarative language, AROS allows the programmer to focus on the \textit{WHAT} and not the \textit{HOW}. It attempts to create a straightforward, abstract way to organise and create a map and computes the path from coordinate A to coordinate B.
+
+\section{Problem statement}
+\label{sec:intro:statement}
+The goal of this paper is to design and implement a functional programming language capable of defining two-dimensional maps in a grid space and routing a robot from start to finish. The programming language should be easy to use and accessible, but also expressive. The overall system should handle parsing, validating and evaluating the written source code in order to obtain the desired result - the optimal path for a robot to take. 
+
+\section{Overview}
+\par
+The report is divided into 3 main parts - the theoretical background of how to build a compiler, the design of the language and the compiler's implementation.
+
+\par 
+The theoretical background of a compiler focuses on what a compiler is and the techniques of building one. The theoretical background section describes the components of a compiler, such as a lexer, parser and contextual analyzer. It also addresses the differences between compilers and interpreters, which will serve as a base for our choices later.  
+
+\par 
+The language design section proposes the intended usage of AROS. It describes the features, constructs and abstractions of the language and how to properly employ them to create effective programs. Later, the languages are described formally using an abstract grammar and a type system.
+
+\par 
+The implementation section firstly justifies the choice of technology and implementation language. Then it addresses how different part of the compiler (lexer, parser, type checker and evaluator) were implemented. Finally, it describes what the source code compiles into and how the description of an environment evaluates into a list of instructions for the autonomous robot.

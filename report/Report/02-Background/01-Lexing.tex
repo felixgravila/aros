@@ -1,0 +1,28 @@
+\section{Lexing}
+\label{background:lexing}
+
+A lexer represents the very first phase of a compiler. Its job is to translate an input stream of characters into a stream of tokens, each corresponding to a terminal symbol of a programming language. \cite[p.57]{craftingCompiler} For example, one token can represent an identifier, another an operator and so on. A precise definition of tokens is necessary to ensure that lexical rules are clearly stated and properly enforced. \cite[p. 58]{craftingCompiler} Usually, white space is a good enough separator that suffices to distinguish tokens. For example, the string "4 -5" manifests as a pair of integer tokens, and the string "4 - 5" is an integer token, followed by an operator and another integer token.  
+
+\par
+All scanners, independent of the tokens to be recognized, perform much the same function. Thus, writing a scanner from scratch means re-implementing components that are common to all scanners; this leads to a significant duplication of effort. The goal of a scanner generator is to limit the effort of building a scanner to that of specifying which tokens the scanner is to recognize. Using a formal notation, we tell the scanner generator what tokens we want to be recognized. It is then the generator’s responsibility to produce a scanner that meets our specification. \cite[p. 59]{craftingCompiler} We have also undertaken this approach, described further in section \cref{sec:impl:lexer}.
+
+
+\subsection{Regular expressions}
+
+\par
+A very convenient way of describing a structure of tokens is by utilising regular expressions. A set of strings can be defined by a regular expression. Such a set is called a regular set. A token class is a regular set, whose structure is defined by a regular expression. An instance of a token class is called a lexeme. \cite[p. 60]{craftingCompiler} 
+
+\par
+The definition of regular expressions starts with the definition of a character set (or an alphabet), denoted $\sum$. A character set can be, for example, a set of ASCII characters. An empty string is allowed and is denoted as $\lambda$. It can be used to represent an optional part of a token, for example, an integer may have a prefix "-" or nothing - $\lambda$.  \cite[p. 60]{craftingCompiler}
+
+\par
+Strings are built from characters in $\sum$ by concatenation. For example, the string $\textit{if}$ is built by concatenating character $\textit{i}$ to $\lambda$ followed by concatenating $\textit{f}$ to $\textit{i}$. Concatenation of $\lambda$ does not change the string. This property can be extended to sets of strings, such that, if $s_1 \in P \text{ and } s_2 \in Q \text{ then } s_1 s_2 \in P \: Q \text{ , where P and Q are sets of strings}$. 
+
+\par
+The character $\textit{|}$ is used to separate alternatives. For example a set of ten single digits can be defined as $D = [0 \:| \: 1 \: | \: 2 \: | \: 3 \: | \: 4 \: | \: 5 \: | \: 6 \: | \: 7 \: | \: 8 \: | \: 9]$. An  equivalent abbreviated form may be used: $D = [0 \: - \: 9]$. Alternation can be extended to sets, such that, $s \in [P \: | \: Q] \text{ if and only if }s \in P \text{ or } s \in Q \text{ , where P and Q are sets of strings}$. \cite[p. 61]{craftingCompiler}    
+
+\par 
+Kleene closure is also allowed, denoted by the post fix operator $ ^* $. For example, $P^*$ represents all strings formed by the concatenation of zero or more selections (possibly repeated) from P (zero selections are represented by $\lambda$), where $P$ is a set of strings. Operator $^+$ represents a positive closure, such a $P^+$ denotes one or more strings in $P$ concatenated together. It also holds that $P^* = [P^+ \: | \: \lambda]$ and $P^+= P \: P^*$. \cite[p. 62]{craftingCompiler}
+
+\par 
+An example of usage of regular expressions is in section \cref{sec:abstract-grammar}, where we define syntactic categories such as Integers, Booleans and Variables.

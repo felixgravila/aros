@@ -1,0 +1,17 @@
+\section{Paradigm choice}
+
+Programming languages can be classified based on their features into different paradigms, the main of which are \textit{imperative} and \textit{declarative}.
+\par
+The imperative programming paradigm allows the programmer to directly describe both the control flow and how the program is executed by changing the state of variables. This allows for constructs such as loops, which are risk-prone due to the fact that different parts of the program can change the same variable.
+\par
+Declarative programming focuses on the "what" and not the "how". The programmer specifies the properties of the result, not how to compute it. The decision to create a declarative programming language stems from the desire for the language to be a more straightforward and simple approach for declaring a map. Another reason is to differentiate it from the already existing and complex C-like code used for the Arduino platform.
+\par
+Logic and functional programming are subsets of declarative programming languages.
+\par
+Logic programming yields the results as the satisfying permutations of states in a defined universe of facts and rules. Using this paradigm would have our language consist of a series of facts describing the obstacles, and then a \textit{path} rule from start to end that would only be satisfied by a valid path.
+\par
+Functional programming returns the answer as the result of function applications. Due to the property of referential transparency, any function call can be any time replaced by its return value without affecting the result. This is important to our language since we want to always apply transformations going from one version to the map to the next while having the certainty that the previous version is unchanged.
+\par
+Functional programming also enables us to treat functions as first-class citizens and thus make our language more expressive.
+\par
+We have therefore decided on using a functional paradigm for AROS. The block structure of the code is familiar to people used to imperative programming, while actually being syntactic sugar for the purely functional "let..in" construct. Immutability enables the programmer to be certain that a defined shape will always stay the same shape, regardless of changes performed on it, without which debugging can possibly be extremely difficult.

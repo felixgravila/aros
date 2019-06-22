@@ -1,0 +1,505 @@
+%  A simple AAU report template.
+%  2014-09-13 v. 1.1.0
+%  Copyright 2010-2014 by Jesper Kjær Nielsen <jkn@es.aau.dk>
+%
+%  This is free software: you can redistribute it and/or modify
+%  it under the terms of the GNU General Public License as published by
+%  the Free Software Foundation, either version 3 of the License, or
+%  (at your option) any later version.
+%
+%  This is distributed in the hope that it will be useful,
+%  but WITHOUT ANY WARRANTY; without even the implied warranty of
+%  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%  GNU General Public License for more details.
+%
+%  You can find the GNU General Public License at <http://www.gnu.org/licenses/>.
+%
+% \documentclass[12pt,twoside,a4paper,openright]{report}
+\documentclass[12pt,twoside,a4paper,openany]{report}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Language, Encoding and Fonts
+% http://en.wikibooks.org/wiki/LaTeX/Internationalization
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Select encoding of your inputs. Depends on
+% your operating system and its default input
+% encoding. Typically, you should use
+%   Linux  : utf8 (most modern Linux distributions)
+%            latin1 
+%   Windows: ansinew
+%            latin1 (works in most cases)
+%   Mac    : applemac
+% Notice that you can manually change the input
+% encoding of your files by selecting "save as"
+% an select the desired input encoding. 
+\usepackage[utf8]{inputenc}
+% Make latex understand and use the typographic
+% rules of the language used in the document.
+\usepackage[danish,english]{babel}
+
+%% ssary things
+%\usepackage[acronym]{glossaries}
+%\makeglossaries
+
+
+
+
+% Use the palatino font
+\usepackage[sc]{mathpazo}
+\linespread{1.05}         % Palatino needs more leading (space between lines)
+% Choose the font encoding
+\usepackage[T1]{fontenc}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Graphics and Tables
+% http://en.wikibooks.org/wiki/LaTeX/Importing_Graphics
+% http://en.wikibooks.org/wiki/LaTeX/Tables
+% http://en.wikibooks.org/wiki/LaTeX/Colors
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% load a colour package
+%%TEMP REMOVED!!!!!!!%%%%%\usepackage{xcolor}
+\usepackage[pdftex,dvipsnames]{xcolor}
+\definecolor{aaublue}{RGB}{33,26,82}% dark blue
+% The standard graphics inclusion package
+\usepackage{graphicx}
+\graphicspath{{Pictures/}}
+% Set up how figure and table captions are displayed
+\usepackage{caption}
+\captionsetup{%
+  font=footnotesize,% set font size to footnotesize
+  labelfont=bf % bold label (e.g., Figure 3.2) font
+}
+\usepackage{subcaption}
+% Make the standard latex tables look so much better
+\usepackage{array,booktabs}
+% Enable the use of frames around, e.g., theorems
+% The framed package is used in the example environment
+\usepackage{framed}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Mathematics
+% http://en.wikibooks.org/wiki/LaTeX/Mathematics
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Defines new environments such as equation,
+% align and split 
+\usepackage{amsmath}
+% Adds new math symbols
+\usepackage{amssymb}
+% Use theorems in your document
+% The ntheorem package is also used for the example environment
+% When using thmmarks, amsmath must be an option as well. Otherwise \eqref doesn't work anymore.
+\usepackage[framed,amsmath,thmmarks]{ntheorem}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Page Layout
+% http://en.wikibooks.org/wiki/LaTeX/Page_Layout
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Change margins, papersize, etc of the document
+\usepackage[
+	left=15mm,
+	right=15mm,
+	top=2cm,
+	bottom=3cm
+	%left=15mm,
+	%right=15mm,
+	%top=3cm,
+	%bottom=3cm
+	]{geometry} 
+% Modify how \chapter, \section, etc. look
+% The titlesec package is very configureable
+\usepackage{titlesec}
+%\titleformat{\chapter}[display]{\normalfont\huge\bfseries\color{aaublue}}{\chaptertitlename\ \thechapter}{20pt}{\Huge}
+\titleformat*{\section}{\normalfont\Large\bfseries\color{aaublue}}
+\titleformat*{\subsection}{\normalfont\large\bfseries\color{aaublue}}
+\titleformat*{\subsubsection}{\normalfont\normalsize\bfseries\color{aaublue}}
+%\titleformat*{\paragraph}{\normalfont\normalsize\bfseries\color{aaublue}}
+%\titleformat*{\subparagraph}{\normalfont\normalsize\bfseries\color{aaublue}}
+
+% Clear empty pages between chapters
+\let\origdoublepage\cleardoublepage
+\newcommand{\clearemptydoublepage}{%
+  \clearpage
+  {\pagestyle{empty}\origdoublepage}%
+}
+\let\cleardoublepage\clearemptydoublepage
+% Tools to flip page content (tables, pictures, etc.)
+\usepackage{adjustbox}
+\usepackage{rotating}
+% Adjustable table width/height structure
+\usepackage{tabularx}
+\usepackage[vlines]{tabularht}
+% Change the headers and footers
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\usepackage[Sonny]{fncychap}
+\fancyhf{} %delete everything
+\renewcommand{\headrulewidth}{0pt} %remove the horizontal line in the header
+\fancyhead[RE]{\color{aaublue}\small\nouppercase\leftmark} %even page - chapter title
+\fancyhead[LO]{\color{aaublue}\small\nouppercase\rightmark} %uneven page - section title
+\fancyhead[LE,RO]{\thepage} %page number on all pages
+\setlength{\headheight}{14.5pt} 
+% Do not stretch the content of a page. Instead,
+% insert white space at the bottom of the page
+\raggedbottom
+% Enable arithmetics with length. Useful when
+% typesetting the layout.
+\usepackage{calc}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Bibliography
+% http://en.wikibooks.org/wiki/LaTeX/Bibliography_Management
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Add the \citep{key} command which display a
+% reference as [author, year]
+\usepackage[numbers]{natbib}
+% Appearance of the bibliography
+\bibliographystyle{plainnat}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Misc
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Include full pdf pages
+\usepackage{pdfpages}
+% Add bibliography and index to the table of
+% contents
+\usepackage[nottoc]{tocbibind}
+% Add the command \pageref{LastPage} which refers to the
+% page number of the last page
+\usepackage{lastpage}
+% Add todo notes in the margin of the document
+\usepackage[
+%  disable, %turn off todonotes
+colorinlistoftodos, %enable a coloured square in the list of todos
+textwidth=\marginparwidth, %set the width of the todonotes
+%textsize=scriptsize, %size of the text in the todonotes
+]{todonotes}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Hyperlinks
+% http://en.wikibooks.org/wiki/LaTeX/Hyperlinks
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Enable hyperlinks and insert info into the pdf
+% file. Hypperref should be loaded as one of the 
+% last packages
+\usepackage{hyperref}
+\hypersetup{%
+	%pdfpagelabels=true,%
+	plainpages=false,%
+	pdfauthor={Felix Gravila, Valer Orlovsky, Miroslav Pakanec},%
+	pdftitle={The AROS Programming Language},%
+	pdfsubject={The AROS Programming Language},%
+	pdfkeywords={AAU Project 8 semester AROS programming language languages compilers },%
+	bookmarksnumbered=true,%
+	colorlinks,%
+	citecolor=aaublue,%
+	filecolor=aaublue,%
+	linkcolor=aaublue,% you should probably change this to black before printing
+	urlcolor=aaublue,%
+	pdfstartview=FitH%
+}
+\newenvironment{itquote}
+  {\begin{quote}\itshape}
+  {\end{quote}\ignorespacesafterend}
+\usepackage{listings}
+\usepackage{float}
+\usepackage{wrapfig}
+%\usepackage{subfig}
+\usepackage{url}
+
+%%\usepackage{minted}
+%\definecolor{graa}{rgb}{0.9, 0.9, 0.9}
+%\usepackage{tcolorbox}
+%\tcbuselibrary{minted,skins}
+%\newtcblisting{mintedboks}[1]{
+%	listing engine=minted,
+%	colback=graa,
+%	colframe=black!70,
+%	listing only,
+%	minted style=colorful,
+%	minted language=#1,
+%	minted options={
+%	    linenos=true,
+%	    tabsize=4,
+%        texcl=true,
+%		fontsize=\footnotesize,
+%		numbersep=3mm,
+%		breaklines=true,
+%		fontfamily=tt
+%	},
+%	top=-0.5mm,
+%	bottom=-0.5mm,
+%	left=5mm,
+%	enhanced,
+%	overlay={\begin{tcbclipinterior}\fill[black!25] (frame.south west)
+%	  		rectangle ([xshift=5mm]frame.north west);\end{tcbclipinterior}}
+%}
+
+\expandafter\def\expandafter\UrlBreaks\expandafter{\UrlBreaks%  save the current one
+  \do\a\do\b\do\c\do\d\do\e\do\f\do\g\do\h\do\i\do\j%
+  \do\k\do\l\do\m\do\n\do\o\do\p\do\q\do\r\do\s\do\t%
+  \do\u\do\v\do\w\do\x\do\y\do\z\do\A\do\B\do\C\do\D%
+  \do\E\do\F\do\G\do\H\do\I\do\J\do\K\do\L\do\M\do\N%
+  \do\O\do\P\do\Q\do\R\do\S\do\T\do\U\do\V\do\W\do\X%
+  \do\Y\do\Z}
+
+%No indent  
+% \newlength\tindent
+% \setlength{\tindent}{\parindent}
+% \setlength{\parindent}{0pt}
+% \renewcommand{\indent}{\hspace*{\tindent}}
+
+%\usepackage{etoolbox}
+%\makeatletter
+%\patchcmd{\FV@SaveLineBox}{%
+%	\strut#1\strut
+%}{%
+%\hyphenchar\font=%
+%% Invisible hyphen:
+%\if\expandafter\@car\f@encoding\relax\@nil O 255 \else 23 \fi
+%% Visible hyphen:
+%% `\- %
+%\strut
+%\nobreak % prevent line break by next \hspace
+%\hspace{0pt}% allow hyphenation of first word
+%#1%
+%\nobreak % without the following \strut would prevent hyphenation of previous word
+%\strut
+%}{}{%
+%\errmessage{\noexpand\FV@SaveLineBox could not be patched}%
+%}
+\makeatother
+\usepackage[linesnumbered]{algorithm2e}
+%\usepackage{msctexen}
+\usepackage{color}
+
+\usepackage[footnote,draft,silent,nomargin]{fixme}
+\fxsetup{theme=color}
+%\definecolor{fxtarget}{rgb}{255,0.0000,0.0000}
+
+%Use cleverref
+\usepackage[english]{cleveref}
+
+%include eps file extensions
+\usepackage{epstopdf}
+\epstopdfsetup{outdir=./epsfigs/}
+
+% Forskellige muligheder for todo's
+\newcommand{\unsure}[1]{\todo[linecolor=red,backgroundcolor=red!25,bordercolor=red,inline]{LÆS! #1}\mbox{}}
+\newcommand{\change}[2][1=]{\todo[linecolor=yellow,backgroundcolor=yellow!25,bordercolor=yellow,#1]{#2}}
+\newcommand{\info}[1]{\todo[linecolor=blue,backgroundcolor=blue!25,bordercolor=blue,inline]{#1}}
+\newcommand{\missingref}[1]{\todo[linecolor=Magenta,backgroundcolor=Magenta!25,bordercolor=Magenta]{\textbf{Mangler ref!} #1}}
+\newcommand{\missingcite}[1]{\todo[linecolor=Magenta,backgroundcolor=Magenta!25,bordercolor=Magenta]{\textbf{Mangler kilde!} #1}}
+\newcommand{\missingdesc}[1]{\todo[linecolor=Magenta,backgroundcolor=Magenta!25,bordercolor=Magenta]{\textbf{Mangler beskrivelse!} #1}}
+
+% Sætter hvor mange tal der skal gives ud og hvor mange der skal vises i indholdsfortegnelse
+\setcounter{tocdepth}{2}
+\setcounter{secnumdepth}{2}
+
+%
+\setlength{\emergencystretch}{3em}
+\renewcommand{\bibfont}{\footnotesize}
+
+\newcommand{\specialcell}[2][c]{%
+  \begin{tabular}[#1]{@{}L@{}}#2\end{tabular}}
+\newcommand{\specialcellTen}[2][c]{%
+  \begin{tabular}[#1]{@{}L{10cm}@{}}#2\end{tabular}}
+  
+\usepackage{array}
+\newcolumntype{L}[1]{>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+\newcolumntype{C}[1]{>{\centering\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+\newcolumntype{R}[1]{>{\raggedleft\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+%\usepackage{tabularx}
+\usepackage{ltablex}
+
+%\usepackage[acronym,shortcuts,acronymlists={hidden},nonumberlist]{glossaries} % If no numbers are wanted nonumberlist
+%
+%\newglossary[algh]{hidden}{acrh}{acnh}{Hidden Acronyms}
+%%\makeglossaries
+%\makenoidxglossaries
+
+
+%make examplesss!!!
+\newtheorem{example}{Example}
+
+\usepackage{syntax}
+
+\usepackage{amsmath}
+
+\usepackage{lstautogobble}
+\usepackage{mathtools}
+
+\lstdefinelanguage{aros}
+{
+  % list of keywords
+  morekeywords={
+    int,
+    vec,
+    bool,
+    crop,
+    grid,
+    head,
+    tail,
+    vecx,
+    vecy,
+    otherwise,
+    if,
+    else,
+    cond,
+    route,
+  },
+  sensitive=true, % keywords are not case-sensitive
+  morecomment=[l]{//}, % l is for line comment
+  morecomment=[s]{/*}{*/}, % s is for start and end delimiter
+  morestring=[b]" % defines that strings are enclosed in double quotes
+}
+% Define Colors
+\usepackage{color}
+\definecolor{eclipseBlue}{RGB}{42,0.0,255}
+\definecolor{eclipseorange}{RGB}{63,127,95}
+\definecolor{eclipsePurple}{RGB}{127,0,85}
+ 
+ \usepackage{pxfonts}
+% Set Language
+\lstset{
+  language={aros},
+  basicstyle=\small\ttfamily, % Global Code Style
+  captionpos=b, % Position of the Caption (t for top, b for bottom)
+  extendedchars=true, % Allows 256 instead of 128 ASCII characters
+      tabsize=2, % number of spaces indented when discovering a tab 
+  columns=fixed, % make all characters equal width
+  keepspaces=true, % does not ignore spaces to fit width, convert tabs to spaces
+  showstringspaces=false, % lets spaces in strings appear as real spaces
+  breaklines=true, % wrap lines if they don't fit
+  frame=trbl, % draw a frame at the top, right, left and bottom of the listing
+  numbers=left, % show line numbers at the left
+  numberstyle=\small\ttfamily, % style of the line numbers
+  commentstyle=\color{eclipseorange}, % style of comments
+  keywordstyle=\color{eclipseBlue}\bfseries, % style of keywords
+  autogobble
+}
+\usepackage{color, soul} 
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{lipsum}
+\usepackage{minted}
+\usepackage{upquote}
+\renewcommand\theFancyVerbLine{\small\arabic{FancyVerbLine}}
+\newcommand{\dollar}{\text{\textbackslash\$}}
+
+% Make listing and lstlisting share counters
+% \AtBeginDocument{%
+%   \let\c@listing\c@lstlisting
+%   \let\thelisting\thelstlisting
+%   \let\ftype@listing\ftype@lstlisting % give the floats the same precedence
+% }
+
+
+
+\definecolor{gray_ulisses}{gray}{0.55}
+\definecolor{castanho_ulisses}{rgb}{0.71,0.33,0.14}
+\definecolor{preto_ulisses}{rgb}{0.41,0.20,0.04}
+\definecolor{green_ulises}{rgb}{0.2,0.75,0}
+\lstdefinelanguage{none}{
+    basicstyle=\ttfamily\small
+}
+\lstdefinelanguage{haskell} {
+    upquote=true,
+	basicstyle=\ttfamily\small,
+	sensitive=true,
+	morecomment=[l][\it\color{gray_ulisses}\ttfamily\small]{--},
+	morecomment=[s][\it\color{gray_ulisses}\ttfamily\small]{\{-}{-\}},
+	morestring=[b]",
+	stringstyle=\color{red},
+	showstringspaces=false,
+	numberstyle=\small,
+	numberblanklines=true,
+	showspaces=false,
+	breaklines=true,
+	showtabs=false,
+	emph=
+	{[1]
+		FilePath,IOError,abs,acos,acosh,all,and,any,appendFile,approxRational,asTypeOf,asin,
+		asinh,atan,atan2,atanh,basicIORun,break,catch,ceiling,chr,compare,concat,concatMap,
+		const,cos,cosh,curry,cycle,decodeFloat,denominator,digitToInt,div,divMod,drop,
+		dropWhile,either,elem,encodeFloat,enumFrom,enumFromThen,enumFromThenTo,enumFromTo,
+		error,even,exp,exponent,fail,filter,flip,floatDigits,floatRadix,floatRange,floor,
+		fmap,foldl,foldl1,foldr,foldr1,fromDouble,fromEnum,fromInt,fromInteger,fromIntegral,
+		fromRational,fst,gcd,getChar,getContents,getLine,head,inRange,index,init,intToDigit,
+		interact,ioError,isAlpha,isAlphaNum,isAscii,isControl,isDenormalized,isDigit,isHexDigit,
+		isIEEE,isInfinite,isLower,isNaN,isNegativeZero,isOctDigit,isPrint,isSpace,isUpper,iterate,
+		last,lcm,length,lex,lexDigits,lexLitChar,lines,log,logBase,lookup,map,mapM,mapM_,max,
+		maxBound,maximum,maybe,min,minBound,minimum,mod,negate,not,notElem,null,numerator,odd,
+		or,ord,otherwise,pi,pred,primExitWith,print,product,properFraction,putChar,putStr,putStrLn,quot,
+		quotRem,range,rangeSize,read,readDec,readFile,readFloat,readHex,readIO,readInt,readList,readLitChar,
+		readLn,readOct,readParen,readSigned,reads,readsPrec,realToFrac,recip,rem,repeat,replicate,return,
+		reverse,round,scaleFloat,scanl,scanl1,scanr,scanr1,seq,sequence,sequence_,show,showChar,showInt,
+		showList,showLitChar,showParen,showSigned,showString,shows,showsPrec,significand,signum,sin,
+		sinh,snd,span,splitAt,sqrt,subtract,succ,sum,tail,take,takeWhile,tan,tanh,threadToIOResult,toEnum,
+		toInt,toInteger,toLower,toRational,toUpper,truncate,uncurry,undefined,unlines,until,unwords,unzip,
+		unzip3,userError,words,writeFile,zip,zip3,zipWith,zipWith3,listArray,doParse,
+		tokentype, token, monad, error, lexer, right, left, nonassoc, 
+	},
+	emphstyle={[1]\color{blue}},
+	emph=
+	{[2]
+		Bool,Char,Double,Either,Float,IO,Integer,Int,Maybe,Ordering,Rational,Ratio,ReadS,ShowS,String,
+		Word8,InPacket
+	},
+	emphstyle={[2]\color{castanho_ulisses}},
+	emph=
+	{[3]
+		case,class,data,deriving,do,else,if,import,in,infixl,infixr,instance,let,
+		module,of,primitive,then,type,where,
+		\$\$, \$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10
+	},
+	emphstyle={[3]\color{preto_ulisses}\textbf},
+	emph=
+	{[4]
+		quot,rem,div,mod,elem,notElem,seq
+	},
+	emphstyle={[4]\color{castanho_ulisses}\textbf},
+	emph=
+	{[5]
+		EQ,False,GT,Just,LT,Left,Nothing,Right,True,Show,Eq,Ord,Num
+	},
+	emphstyle={[5]\color{preto_ulisses}\textbf}
+}
+\lstdefinelanguage{alex}{
+	basicstyle=\ttfamily\small,
+	sensitive=true,
+	morecomment=[l][\it\color{gray_ulisses}\ttfamily\small]{--},
+	morecomment=[s][\it\color{gray_ulisses}\ttfamily\small]{\{-}{-\}},
+	morestring=[b]",
+	stringstyle=\color{red},
+	showstringspaces=false,
+	numberstyle=\small,
+	numberblanklines=true,
+	showspaces=false,
+	breaklines=true,
+	showtabs=false,
+}
+\lstdefinelanguage{happy}{
+	basicstyle=\ttfamily\small,
+	sensitive=true,
+	morecomment=[l][\it\color{gray_ulisses}\ttfamily\small]{--},
+	morecomment=[s][\it\color{gray_ulisses}\ttfamily\small]{\{-}{-\}},
+	morestring=[b]",
+	morestring=[b]',
+	stringstyle=\color{red},
+	showstringspaces=false,
+	numberstyle=\small,
+	numberblanklines=true,
+	showspaces=false,
+	breaklines=true,
+	showtabs=false,
+	emph=
+	{[1]
+		tokentype, token, monad, error, lexer, right, left, nonassoc, 
+	},
+	emphstyle={[1]\color{blue}},
+	emph=
+	{[2]
+		case,class,data,deriving,do,else,if,import,in,infixl,infixr,instance,let,
+		module,of,primitive,then,type,where,
+		\$\$, \$1, \$2, \$3, \$4, \$5, \$6
+	},
+	emphstyle={[2]\color{preto_ulisses}\textbf},
+}

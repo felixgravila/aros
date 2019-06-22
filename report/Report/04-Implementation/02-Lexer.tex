@@ -1,0 +1,102 @@
+\section{Lexer}
+\label{sec:impl:lexer}
+As explained in \cref{background:lexing}, lexical analysis is usually the first phase of a compiler or interpreter, during which the raw stream of characters (source code) is reduced and transformed into tokens. The lexical analyzer, or simply lexer, therefore represents the first pass in our implementation.
+\subsection{Tokens}
+The tokens we have identified for our language have been implemented under a single \lstinline{Token} algebraic data type, where \lstinline{Token} is a sum of all the possible tokens. The definition of `Token` may be seen in \cref{lst:token-adt} below.
+While most tokens simply represent a static keyword or symbol that bears a specific meaning in AROS, the tokens for literals and identifiers (lines 1 and 2) also have a parameter for holding dynamic values as basic Haskell data types (\lstinline{Int}, \lstinline{Bool}, \lstinline{String}). 
+\begin{lstlisting}[language=haskell, float=h,
+caption=AROS tokens represented using a Haskell algebraic data type,
+label=lst:token-adt]
+data Token = TokenIntLit Int | TokenBoolLit Bool
+           | TokenIdent String
+           | TokenInt | TokenVec | TokenBool
+           | TokenGrid | TokenRoute
+           | TokenNot | TokenAnd | TokenOr
+           | TokenGte | TokenLte | TokenGt
+           | TokenLt | TokenEq | TokenNeq
+           | TokenHead | TokenTail
+           | TokenVecx | TokenVecy
+           | TokenCrop | TokenShift
+           | TokenIf | TokenElse
+           | TokenCond | TokenOtherwise
+           | TokenArrow
+           | TokenPlus | TokenMinus | TokenTimes | TokenDiv
+           | TokenColon | TokenDoublePlus
+           | TokenUnion | TokenIntersection
+           | TokenLParen | TokenRParen
+           | TokenLBrace | TokenRBrace
+           | TokenLBracket | TokenRBracket
+           | TokenComma | TokenSemiColon | TokenEOF
+           deriving (Eq,Show, Ord)
+\end{lstlisting}
+\subsection{Lexer generator - Alex}
+Having defined a data type for tokens into which raw source code should be transformed, we needed to implement the lexer. The lexer needs to tokenize the input based on a set of regular expressions, each corresponding to a specific token and in their entirety representing the regular grammar for lexing.  
+\par
+The first implementation option that was considered was to implement the lexer by hand. While this is a viable option, we decided to choose another common approach and use a lexer generator. Lexer generators are generic tools, which can be used to automatically generate the code of a lexer. As its input, a lexer generator requires a specification of the tokens as well as of the regular grammar (usually in form of regular expressions) according to which tokens should be created.  
+\par
+Selecting a lexer generator instead of writing the lexer manually allowed us to better utilize our time and put more focus on later stages of the interpreter. The choice of the specific tool called Alex was mainly driven by our implementation language Haskell. Alex is a well known and widely used lexer generator in the Haskell community and offers an extensive set of features, and therefore meets our requirements. \cite{alexUserGuide}   
+\subsection{Lexer specification}
+\label{sec:lexer:spec}
+In this subsection, we will describe the Alex lexical specification (Alex file) we wrote in order to have our desired lexer code generated. The file is written in a domain language specific to Alex, which provides syntax for declaring general configuration of the lexer as well as binding regular expressions to tokens. The Alex file provides multiple extension points where literal Haskell code can be inserted. \cite{alexUserGuide}
+\begin{lstlisting}[language=alex, float=p,
+caption=Token specifications in Alex file,
+label=lst:alex-tokens]
+tokens :-
+  $white+             ;
+  "//".*              ;
+  [a-z][a-zA-Z0-9_']* { lexInputTkn TokenIdent }
+  [\-]?(0|[1-9][0-9]*){ lexInputTkn (TokenIntLit . read) }
+  true|false          { lexInputTkn ( TokenBoolLit . (== "true")) }
+  not                 { lexTkn TokenNot }
+  head                { lexTkn TokenHead }
+  tail                { lexTkn TokenTail }
+  vecx                { lexTkn TokenVecx }
+  vecy                { lexTkn TokenVecy }
+  int                 { lexTkn TokenInt }
+  vec                 { lexTkn TokenVec }
+  bool                { lexTkn TokenBool }
+  grid                { lexTkn TokenGrid }
+  route               { lexTkn TokenRoute }
+  crop                { lexTkn TokenCrop }
+  and                 { lexTkn TokenAnd }
+  or                  { lexTkn TokenOr }
+  if                  { lexTkn TokenIf }
+  else                { lexTkn TokenElse }
+  cond                { lexTkn TokenCond }
+  otherwise           { lexTkn TokenOtherwise }
+  "->"                { lexTkn TokenArrow }
+  "+"                 { lexTkn TokenPlus }
+  "-"                 { lexTkn TokenMinus }
+  "/"                 { lexTkn TokenDiv }
+  "*"                 { lexTkn TokenTimes }
+  ":"                 { lexTkn TokenColon }
+  "++"                { lexTkn TokenDoublePlus }
+  "<>"                { lexTkn TokenUnion }
+  "><"                { lexTkn TokenIntersection }
+  ">>"                { lexTkn TokenShift }
+  ">="                { lexTkn TokenGte }
+  "<="                { lexTkn TokenLte }
+  ">"                 { lexTkn TokenGt }
+  "<"                 { lexTkn TokenLt}
+  "=="                { lexTkn TokenEq }
+  "!="                { lexTkn TokenNeq }
+  "="                 { lexTkn TokenAssign }
+  "("                 { lexTkn TokenLParen }
+  ")"                 { lexTkn TokenRParen }
+  "{"                 { lexTkn TokenLBrace }
+  "}"                 { lexTkn TokenRBrace }
+  "["                 { lexTkn TokenLBracket }
+  "]"                 { lexTkn TokenRBracket }
+  ","                 { lexTkn TokenComma }
+  ";"                 { lexTkn TokenSemiColon }
+\end{lstlisting}
+\par \Cref{lst:alex-tokens} on \cpageref{lst:alex-tokens} contains the essential part of the Alex file, where regular expression which define the lexical units of AROS are each associated with a respective constructor of the \lstinline{Token} type from \cref{lst:token-adt}. The rest of the Alex file, apart from practical definitions such as module name and imports, contains helper functions which interface with the different built-in functions of Alex in order for the generated lexer to produce the tokens in a desired format.
+\par To interface with Alex, we used what is in Alex terminology referred to as a \textit{wrapper}. In brief, wrappers serve as modes of operation of the lexer, exposing different functions of Alex, as well as additional contextual information, such as position in the raw stream. For our lexer, we used the \lstinline{monadUserState} wrapper, which makes Alex generate a lexer that holds its state in a user-defined data structure, using Haskell monads. We decided to use this more complicated mode of operation of the lexer in order to provide the users of AROS with more feedback.\cite{alexUserGuide}
+\par The data structure we defined for the \lstinline{monadUserState} wrapper simply holds a filename of the input file being processed. In addition to that, we wrap our lexed tokens in another data type \lstinline{TokenState}, which apart from the token itself also holds information about the position at which this token was lexed. This happens using helper functions \lstinline{lexTkn} and \lstinline{lexTknInput}, visible in \cref{lst:alex-tokens} on page \cpageref{lst:alex-tokens}. These custom structures, together with the \lstinline{monadUserState} wrapper option, allow us to return more informative error messages during lexing and parsing. An example of such error may be seen in \cref{lst:lexing-error} below, where a lexical error is reported due to an invalid character (~) on line 4, column 9 of file \lstinline{test.aros}.
+\begin{lstlisting}[numbers=none,
+caption=Example of an error message reported due to a lexical error in AROS,
+label=lst:lexing-error]
+test.aros:4:9: lexical error at character '~'
+\end{lstlisting}
+\par
+In conclusion, to implement our lexer, we used a lexer generator tool from the Haskell ecosystem called Alex. We defined our tokens using a Haskell data type, which we then used in an Alex lexical specification together with regular expressions for our tokens. Additionally, we leveraged some more advanced features of Alex in order to keep track of the filename and text position, to be used in lexing and parsing errors.
