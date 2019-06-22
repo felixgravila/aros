@@ -14,6 +14,13 @@ doTypeCheck file = do
   let (programOk,_) = runChecker ast
   return programOk
 
+
+doEvaluate :: [Char] -> IO EvalResult
+doEvaluate file = do
+  code <- readFile (resDir ++ file)
+  let (Right res) = evalTree $ parseAros file code
+  return res
+
 main :: IO ()
 main = hspec $ do
   describe "Parsing" $ do
@@ -49,4 +56,9 @@ main = hspec $ do
 
   describe "Evaluation" $ do
     it "04-properMap should evaluate correctly" $ do
-      True `shouldBe` True
+      (EvalResult playsize obstacles (start, end) route) <- doEvaluate "04-properMap.aros"
+      playsize `shouldBe` (7,7)
+      obstacles `shouldBe` [(1,0),(1,1),(1,2),(1,3),(1,4),(1,5),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(5,0),(5,1),(5,2),(5,3),(5,4),(5,5)]
+      start `shouldBe` (0,0)
+      end `shouldBe` (6,0)
+      route `shouldBe` "Right Right Right Right Right Right Down Down Left Left Left Left Left Left Down Down Right Right Right Right Right Right Down Down Left Left Left Left Left Left Done."
